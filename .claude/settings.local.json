@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(netstat -ano)",
+      "Bash(rm -f \"C:/Users/sahan/Claude/Dashboard/data/tablespace.db\")",
+      "Bash(node lib/seed.ts)",
+      "Bash(node -e ':*)",
+      "Bash(npx tsc:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(gh auth:*)",
+      "Bash(git --version)",
+      "Bash(git -C \"C:/Users/sahan/Claude/Dashboard\" status)"
+    ]
+  }
+}
