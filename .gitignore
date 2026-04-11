@@ -24,5 +24,8 @@ Thumbs.db
 .vscode/
 *.log
 
+# Claude Code local settings (may contain tokens)
+.claude/
+
 # TypeScript
 tsconfig.tsbuildinfo

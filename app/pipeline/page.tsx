@@ -9,24 +9,21 @@ import Link from 'next/link';
 
 // ── Stage config with Salesforce-style probabilities ──────────
 const KANBAN_STAGES = [
-  { key: 'Qualification',  label: 'Qualification',  color: '#38bdf8', prob: 20  },
-  { key: 'Needs Analysis', label: 'Needs Analysis', color: '#a78bfa', prob: 25  },
-  { key: 'Proposal',       label: 'Proposal',       color: '#fbbf24', prob: 65  },
-  { key: 'Negotiation',    label: 'Negotiation',    color: '#f97316', prob: 80  },
-  { key: 'Closed Won',     label: 'Closed Won',     color: '#34d399', prob: 100 },
+  { key: 'Prospecting',         label: 'Prospecting',      color: '#8896aa', prob: 10  },
+  { key: 'Qualification',       label: 'Qualification',    color: '#38bdf8', prob: 20  },
+  { key: 'Needs Analysis',      label: 'Needs Analysis',   color: '#a78bfa', prob: 25  },
+  { key: 'Value Proposition',   label: 'Value Prop',       color: '#60a5fa', prob: 35  },
+  { key: 'Id. Decision Makers', label: 'Decision Makers',  color: '#c084fc', prob: 40  },
+  { key: 'Perception Analysis', label: 'Perception',       color: '#e879f9', prob: 50  },
+  { key: 'Proposal/Price Quote',label: 'Proposal',         color: '#fbbf24', prob: 65  },
+  { key: 'Negotiation/Review',  label: 'Negotiation',      color: '#f97316', prob: 80  },
+  { key: 'Closed Won',          label: 'Closed Won',       color: '#34d399', prob: 100 },
+  { key: 'Closed Lost',         label: 'Closed Lost',      color: '#f43f5e', prob: 0   },
 ];
 
-const ALL_STAGES = [
-  'Prospecting','Qualification','Needs Analysis','Value Proposition',
-  'Id. Decision Makers','Perception Analysis','Proposal/Price Quote',
-  'Negotiation/Review','Closed Won',
-];
+const ALL_STAGES = KANBAN_STAGES.map(s => s.key);
 
-const STAGE_PROB: Record<string, number> = {
-  'Prospecting':10,'Qualification':20,'Needs Analysis':25,'Value Proposition':35,
-  'Id. Decision Makers':40,'Perception Analysis':50,'Proposal/Price Quote':65,
-  'Negotiation/Review':80,'Closed Won':100,'Closed Lost':0,
-};
+const STAGE_PROB: Record<string, number> = Object.fromEntries(KANBAN_STAGES.map(s => [s.key, s.prob]));
 
 // account_type descriptions
 const ACCOUNT_TYPE_DESC: Record<string, string> = {
@@ -35,16 +32,12 @@ const ACCOUNT_TYPE_DESC: Record<string, string> = {
   'SME':        'Small & medium businesses requiring <70 seats — boutique firms, early-stage startups',
 };
 
+// No mapping needed — DB stage names match kanban keys directly
 function mapStage(dbStage: string): string {
-  if (dbStage === 'Proposal/Price Quote') return 'Proposal';
-  if (dbStage === 'Negotiation/Review')   return 'Negotiation';
-  if (KANBAN_STAGES.some(s => s.key === dbStage)) return dbStage;
   return dbStage;
 }
 
 function mapStageBack(kanbanKey: string): string {
-  if (kanbanKey === 'Proposal')    return 'Proposal/Price Quote';
-  if (kanbanKey === 'Negotiation') return 'Negotiation/Review';
   return kanbanKey;
 }
 
@@ -593,7 +586,8 @@ export default function PipelinePage() {
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/leads?status=active');
+    // Load all leads so Closed Won / Closed Lost columns are populated
+    const res = await fetch('/api/leads?status=all');
     const data = await res.json();
     setLeads(data);
     setLoading(false);
@@ -601,15 +595,18 @@ export default function PipelinePage() {
 
   useEffect(() => { loadLeads(); }, [loadLeads]);
 
-  // Drop handler — PATCH stage via API
+  // Drop handler — PATCH stage + status via API
   async function handleDrop(leadId: number, toStageKey: string) {
     const dbStage = mapStageBack(toStageKey);
     const prob    = STAGE_PROB[dbStage] ?? 10;
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stage: dbStage, probability: prob } : l));
+    const status  = dbStage === 'Closed Won' ? 'won'
+                  : dbStage === 'Closed Lost' ? 'lost'
+                  : 'active';
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stage: dbStage, probability: prob, status } : l));
     await fetch(`/api/leads/${leadId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage: dbStage, probability: prob }),
+      body: JSON.stringify({ stage: dbStage, probability: prob, status }),
     });
   }
 

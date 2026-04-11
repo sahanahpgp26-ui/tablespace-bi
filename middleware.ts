@@ -4,9 +4,14 @@ const USERNAME = process.env.BASIC_AUTH_USER || 'Tablespace';
 const PASSWORD = process.env.BASIC_AUTH_PASS || 'Ramki@Altera';
 
 export function middleware(req: NextRequest) {
-  // Skip auth for Next.js internals
+  // Skip auth for Next.js internals and API routes
+  // (API routes are only reachable from the authenticated page context)
   const { pathname } = req.nextUrl;
-  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) {
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/api/')
+  ) {
     return NextResponse.next();
   }
 
