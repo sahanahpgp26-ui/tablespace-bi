@@ -9,7 +9,8 @@
       "mcp__Claude_Preview__preview_start",
       "Bash(gh auth:*)",
       "Bash(git --version)",
-      "Bash(git -C \"C:/Users/sahan/Claude/Dashboard\" status)"
+      "Bash(git -C \"C:/Users/sahan/Claude/Dashboard\" status)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://api.github.com)"
     ]
   }
 }
