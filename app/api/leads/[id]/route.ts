@@ -12,7 +12,7 @@ export function GET(_req: NextRequest, { params }: { params: { id: string } }) {
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const db = getDb();
   const body = await req.json();
-  const allowed = ['stage', 'score', 'status', 'notes', 'close_date', 'expected_revenue', 'budget_per_seat'];
+  const allowed = ['stage', 'score', 'status', 'notes', 'close_date', 'expected_revenue', 'budget_per_seat', 'assigned_to', 'probability'];
   const updates = Object.entries(body).filter(([k]) => allowed.includes(k));
   if (!updates.length) return NextResponse.json({ error: 'No valid fields' }, { status: 400 });
 

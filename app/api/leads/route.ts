@@ -8,13 +8,16 @@ export function GET(req: NextRequest) {
   const city = searchParams.get('city');
   const status = searchParams.get('status') || 'active';
 
-  let query = 'SELECT * FROM leads WHERE 1=1';
+  let query = `
+    SELECT l.*,
+      (SELECT MAX(a.created_at) FROM activities a WHERE a.lead_id = l.id) as last_activity
+    FROM leads l WHERE 1=1`;
   const params: (string | number | bigint | null)[] = [];
 
-  if (stage) { query += ' AND stage = ?'; params.push(stage); }
-  if (city) { query += ' AND city = ?'; params.push(city); }
-  if (status !== 'all') { query += ' AND status = ?'; params.push(status); }
-  query += ' ORDER BY score DESC, created_at DESC';
+  if (stage) { query += ' AND l.stage = ?'; params.push(stage); }
+  if (city) { query += ' AND l.city = ?'; params.push(city); }
+  if (status !== 'all') { query += ' AND l.status = ?'; params.push(status); }
+  query += ' ORDER BY l.score DESC, l.created_at DESC';
 
   const leads = db.prepare(query).all(...params);
   return NextResponse.json(leads);

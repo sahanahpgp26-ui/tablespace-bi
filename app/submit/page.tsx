@@ -7,7 +7,7 @@ import Link from 'next/link';
 const CITIES = ['Bangalore', 'Mumbai', 'Gurugram', 'Hyderabad', 'Pune', 'Chennai'];
 const STAGES = ['Prospecting', 'Qualification', 'Needs Analysis', 'Value Proposition', 'Id. Decision Makers', 'Perception Analysis', 'Proposal/Price Quote', 'Negotiation/Review'];
 const SOURCES = ['Inbound Web', 'Cold Outreach', 'Referral', 'LinkedIn', 'Event', 'Broker', 'Phone Inquiry'];
-const INDUSTRIES = ['Technology', 'BFSI', 'Consulting', 'E-Commerce', 'Healthcare', 'Media', 'Manufacturing', 'Legal'];
+const INDUSTRIES = ['Technology', 'BFSI', 'Consulting', 'E-Commerce', 'Healthcare', 'Media', 'Manufacturing', 'Legal', 'Real Estate', 'Retail', 'Education', 'Logistics', 'Other'];
 const ACCOUNT_TYPES = ['Enterprise', 'Growth', 'SME'];
 
 export default function SubmitPage() {
@@ -21,6 +21,7 @@ export default function SubmitPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [customIndustry, setCustomIndustry] = useState('');
 
   function set(field: string, value: string) {
     setForm(prev => {
@@ -46,6 +47,7 @@ export default function SubmitPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
+          industry: form.industry === 'Other' ? (customIndustry.trim() || 'Other') : form.industry,
           seats_required: Number(form.seats_required) || null,
           budget_per_seat: Number(form.budget_per_seat) || null,
           expected_revenue: Number(form.expected_revenue) || null,
@@ -106,6 +108,14 @@ export default function SubmitPage() {
               <select value={form.industry} onChange={e => set('industry', e.target.value)} className="field-input">
                 {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
               </select>
+              {form.industry === 'Other' && (
+                <input
+                  value={customIndustry}
+                  onChange={e => setCustomIndustry(e.target.value)}
+                  placeholder="Specify industry…"
+                  className="field-input mt-2"
+                />
+              )}
             </div>
             <div>
               <label className="text-xs text-[#8896aa] block mb-1.5">Contact Name</label>

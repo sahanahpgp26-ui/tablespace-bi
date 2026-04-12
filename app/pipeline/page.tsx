@@ -59,6 +59,7 @@ interface Lead {
   assigned_to: string;
   probability: number;
   created_at: string;
+  last_activity: string | null;
 }
 
 function scoreColor(score: number) {
@@ -78,6 +79,11 @@ function daysTill(dateStr: string) {
   return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
 }
 
+function daysSince(dateStr: string | null) {
+  if (!dateStr) return 999;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+}
+
 function initials(name: string) {
   return name.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
 }
@@ -86,6 +92,8 @@ const AVATAR_COLORS: Record<string, string> = {
   'Rohan Kapoor': '#f97316', 'Priya Menon': '#38bdf8', 'Aditya Sharma': '#34d399',
   'Kavya Nair': '#a78bfa', 'Siddharth Rao': '#fbbf24', 'Divya Iyer': '#f43f5e',
 };
+
+const ALL_REPS = ['Rohan Kapoor', 'Priya Menon', 'Aditya Sharma', 'Kavya Nair', 'Siddharth Rao', 'Divya Iyer'];
 
 // ── Subscribe Modal ───────────────────────────────────────────
 function SubscribeModal({ onClose }: { onClose: () => void }) {
@@ -152,7 +160,7 @@ function SubscribeModal({ onClose }: { onClose: () => void }) {
 
 // ── Inline-editable Lead Card ─────────────────────────────────
 function LeadCard({
-  lead, isDragging, onDragStart, onDragEnd, onClick, onUpdate,
+  lead, isDragging, onDragStart, onDragEnd, onClick, onUpdate, onAssign,
 }: {
   lead: Lead;
   isDragging: boolean;
@@ -160,6 +168,7 @@ function LeadCard({
   onDragEnd: () => void;
   onClick: () => void;
   onUpdate: (id: number, field: string, value: string | number) => void;
+  onAssign: (id: number, rep: string) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draftCompany, setDraftCompany] = useState(lead.company);
@@ -173,6 +182,8 @@ function LeadCard({
   const aColor  = AVATAR_COLORS[lead.assigned_to] || '#8896aa';
   const prob    = STAGE_PROB[lead.stage] ?? lead.probability ?? 10;
   const expectedWeighted = (lead.expected_revenue * prob) / 100;
+  const stale   = daysSince(lead.last_activity) >= 15;
+  const [showAssignMenu, setShowAssignMenu] = useState(false);
 
   function startEdit(field: string, e: React.MouseEvent) {
     e.stopPropagation();
@@ -231,6 +242,11 @@ function LeadCard({
                 onClick={e => startEdit('company', e)}
                 className="opacity-0 group-hover/name:opacity-100 transition-opacity text-[#4a5568] hover:text-[#8896aa]"
               ><Edit2 size={9} /></button>
+              {stale && (
+                <span title={`No activity for ${daysSince(lead.last_activity)} days`} className="shrink-0">
+                  <AlertCircle size={10} style={{ color: '#f87171' }} />
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -306,28 +322,51 @@ function LeadCard({
       <div className="ml-4 flex items-center gap-1 flex-wrap">
         <span className="badge text-[10px]" style={{ background: '#1e2530', color: '#8896aa' }}>{lead.seats_required}seats</span>
         <span className="badge text-[10px]" style={{ background: '#1e2530', color: '#8896aa' }}>{lead.source}</span>
-        {lead.assigned_to && (
-          <span
-            className="badge text-[10px] flex items-center gap-0.5 ml-auto"
+        {/* Assignee — click to reassign */}
+        <div className="relative ml-auto" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => setShowAssignMenu(p => !p)}
+            className="badge text-[10px] flex items-center gap-0.5 hover:opacity-80 transition-opacity"
             style={{ background: `${aColor}18`, color: aColor }}
-            title={lead.assigned_to}
+            title="Click to reassign"
           >
-            <span className="w-3.5 h-3.5 rounded-full text-[8px] flex items-center justify-center font-bold" style={{ background: aColor, color: '#000' }}>
-              {initials(lead.assigned_to)}
+            <span className="w-3.5 h-3.5 rounded-full text-[8px] flex items-center justify-center font-bold" style={{ background: aColor, color: '#080d14' }}>
+              {lead.assigned_to ? initials(lead.assigned_to) : '?'}
             </span>
-            {lead.assigned_to.split(' ')[0]}
-          </span>
-        )}
+            {lead.assigned_to ? lead.assigned_to.split(' ')[0] : 'Unassigned'}
+            <ChevronDown size={8} className="opacity-60" />
+          </button>
+          {showAssignMenu && (
+            <div className="absolute right-0 bottom-full mb-1 z-20 rounded-lg border border-[#1e2530] overflow-hidden" style={{ background: '#0f1318', minWidth: '140px' }}>
+              {ALL_REPS.map(rep => (
+                <button
+                  key={rep}
+                  onClick={() => { onAssign(lead.id, rep); setShowAssignMenu(false); }}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-[11px] hover:bg-[#161b23] text-left transition-colors"
+                  style={{ color: rep === lead.assigned_to ? AVATAR_COLORS[rep] : '#8896aa' }}
+                >
+                  <span className="w-4 h-4 rounded-full text-[8px] flex items-center justify-center font-bold shrink-0" style={{ background: AVATAR_COLORS[rep] || '#8896aa', color: '#080d14' }}>
+                    {initials(rep)}
+                  </span>
+                  {rep}
+                  {rep === lead.assigned_to && <Check size={9} className="ml-auto" style={{ color: AVATAR_COLORS[rep] }} />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 // ── Lead Detail Modal ─────────────────────────────────────────
-function LeadModal({ lead, onClose, onUpdate }: {
+function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
   lead: Lead;
   onClose: () => void;
   onUpdate: (id: number, stage: string, score: number) => void;
+  onAssign: (id: number, rep: string) => void;
+  suggestRep: (lead: Lead) => string;
 }) {
   const [saving, setSaving] = useState(false);
   const [stage, setStage]   = useState(lead.stage);
@@ -337,6 +376,8 @@ function LeadModal({ lead, onClose, onUpdate }: {
   const [eventInput, setEventInput] = useState('');
   const [tasks, setTasks]   = useState<string[]>([]);
   const [events, setEvents] = useState<string[]>([]);
+  const [assignedTo, setAssignedTo] = useState(lead.assigned_to);
+  const suggested = suggestRep(lead);
 
   const prob = STAGE_PROB[stage] ?? 10;
 
@@ -358,17 +399,36 @@ function LeadModal({ lead, onClose, onUpdate }: {
 
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
-          <div>
+          <div className="flex-1 min-w-0 mr-3">
             <h2 className="text-lg font-semibold text-[#dde3ed]">{lead.company}</h2>
             <div className="text-xs text-[#8896aa]">{lead.contact_name} · {lead.industry} · {lead.city}</div>
-            {lead.assigned_to && (
-              <div className="flex items-center gap-1 mt-1 text-[11px]" style={{ color: AVATAR_COLORS[lead.assigned_to] || '#8896aa' }}>
-                <User size={10} />
-                <span>{lead.assigned_to}</span>
-              </div>
-            )}
+            {/* Assignee row with reassign dropdown */}
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <div className="text-[10px] text-[#4a5568]">Assigned to:</div>
+              <select
+                value={assignedTo}
+                onChange={async e => {
+                  setAssignedTo(e.target.value);
+                  onAssign(lead.id, e.target.value);
+                }}
+                className="text-[11px] rounded px-2 py-0.5 border outline-none"
+                style={{ background: '#161b23', borderColor: '#1e2530', color: AVATAR_COLORS[assignedTo] || '#8896aa' }}
+              >
+                {ALL_REPS.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              {suggested !== assignedTo && (
+                <button
+                  onClick={() => { setAssignedTo(suggested); onAssign(lead.id, suggested); }}
+                  className="text-[10px] px-2 py-0.5 rounded border transition-colors"
+                  style={{ borderColor: '#34d39940', color: '#34d399', background: 'rgba(52,211,153,0.07)' }}
+                  title="Suggested based on lowest active lead count in this city"
+                >
+                  ✦ Suggest: {suggested.split(' ')[0]}
+                </button>
+              )}
+            </div>
           </div>
-          <button onClick={onClose} className="text-[#8896aa] hover:text-[#dde3ed] text-xl leading-none">×</button>
+          <button onClick={onClose} className="text-[#8896aa] hover:text-[#dde3ed] text-xl leading-none shrink-0">×</button>
         </div>
 
         {/* KPI mini row */}
@@ -489,12 +549,13 @@ function LeadModal({ lead, onClose, onUpdate }: {
 
 // ── Kanban Column ─────────────────────────────────────────────
 function KanbanColumn({
-  stage, leads, onCardClick, onUpdate, dragOverCol, setDragOverCol, setDraggingId, draggingId, onDrop,
+  stage, leads, onCardClick, onUpdate, onAssign, dragOverCol, setDragOverCol, setDraggingId, draggingId, onDrop,
 }: {
   stage: typeof KANBAN_STAGES[0];
   leads: Lead[];
   onCardClick: (lead: Lead) => void;
   onUpdate: (id: number, field: string, value: string | number) => void;
+  onAssign: (id: number, rep: string) => void;
   dragOverCol: string | null;
   setDragOverCol: (c: string | null) => void;
   setDraggingId: (id: number | null) => void;
@@ -559,6 +620,7 @@ function KanbanColumn({
             onDragEnd={() => setDraggingId(null)}
             onClick={() => onCardClick(lead)}
             onUpdate={onUpdate}
+            onAssign={onAssign}
           />
         ))}
         {leads.length === 0 && (
@@ -612,6 +674,25 @@ export default function PipelinePage() {
 
   function handleCardUpdate(id: number, field: string, value: string | number) {
     setLeads(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+  }
+
+  async function handleAssign(leadId: number, rep: string) {
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, assigned_to: rep } : l));
+    await fetch(`/api/leads/${leadId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assigned_to: rep }),
+    });
+  }
+
+  // Smart assignment suggestion: rep with fewest active leads in same city
+  function suggestRep(lead: Lead): string {
+    const cityLeads = leads.filter(l => l.city === lead.city && l.status === 'active');
+    const counts = ALL_REPS.reduce((acc, rep) => {
+      acc[rep] = cityLeads.filter(l => l.assigned_to === rep).length;
+      return acc;
+    }, {} as Record<string, number>);
+    return ALL_REPS.sort((a, b) => counts[a] - counts[b])[0];
   }
 
   function handleModalUpdate(id: number, stage: string, score: number) {
@@ -733,6 +814,7 @@ export default function PipelinePage() {
               leads={col.leads}
               onCardClick={setSelected}
               onUpdate={handleCardUpdate}
+              onAssign={handleAssign}
               dragOverCol={dragOverCol}
               setDragOverCol={setDragOverCol}
               draggingId={draggingId}
@@ -744,28 +826,46 @@ export default function PipelinePage() {
       )}
 
       {/* Pipeline summary bar */}
-      <div className="mt-4 flex items-center gap-4 p-4 card flex-wrap">
-        <div>
-          <div className="text-[10px] text-[#4a5568]">Total Pipeline</div>
-          <div className="font-mono font-semibold text-base" style={{ color: '#34d399' }}>{fmtRevenue(totalPipelineValue)}</div>
+      <div className="mt-4 card p-0 overflow-hidden">
+        {/* Hero weighted number */}
+        <div className="flex items-stretch">
+          <div className="px-5 py-3 border-r border-[#1e2530]" style={{ background: 'rgba(56,189,248,0.06)' }}>
+            <div className="text-[10px] text-[#8896aa] mb-0.5 uppercase tracking-widest">Weighted Pipeline</div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-mono font-bold text-2xl" style={{ color: '#38bdf8' }}>{fmtRevenue(totalWeightedPipeline)}</span>
+              <span className="text-xs text-[#4a5568]">probability-adjusted</span>
+            </div>
+            <div className="text-[10px] text-[#4a5568] mt-0.5">from <span className="text-[#8896aa] font-semibold">{tabFiltered.filter(l => l.status === 'active').length} active opportunities</span></div>
+          </div>
+          <div className="px-5 py-3 border-r border-[#1e2530]">
+            <div className="text-[10px] text-[#8896aa] mb-0.5 uppercase tracking-widest">Total Pipeline</div>
+            <div className="font-mono font-bold text-2xl" style={{ color: '#34d399' }}>{fmtRevenue(totalPipelineValue)}</div>
+            <div className="text-[10px] text-[#4a5568] mt-0.5">face value</div>
+          </div>
+          <div className="flex-1 px-5 py-3 flex flex-col justify-between">
+            <div className="text-[10px] text-[#4a5568] mb-1.5">Pipeline by stage</div>
+            <div className="flex gap-1 h-2.5">
+              {kanbanColumns.map(c => {
+                const pct = totalPipelineValue > 0
+                  ? (c.leads.reduce((s, l) => s + l.expected_revenue, 0) / totalPipelineValue) * 100
+                  : 0;
+                return pct > 0 ? (
+                  <div key={c.key} title={`${c.label}: ${fmtRevenue(c.leads.reduce((s, l) => s + l.expected_revenue, 0))} (${pct.toFixed(0)}%)`}
+                    className="rounded-sm transition-all" style={{ width: `${pct}%`, background: c.color, opacity: 0.85 }}
+                  />
+                ) : null;
+              })}
+            </div>
+            <div className="flex gap-3 mt-1.5 flex-wrap">
+              {kanbanColumns.filter(c => c.leads.length > 0).map(c => (
+                <span key={c.key} className="text-[9px] flex items-center gap-1" style={{ color: '#4a5568' }}>
+                  <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: c.color }} />
+                  {c.label} ({c.leads.length})
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
-        <div>
-          <div className="text-[10px] text-[#4a5568]">Weighted Expected</div>
-          <div className="font-mono font-semibold text-base" style={{ color: '#38bdf8' }}>{fmtRevenue(totalWeightedPipeline)}</div>
-        </div>
-        <div className="flex-1 flex gap-1 h-2 mx-2">
-          {kanbanColumns.map(c => {
-            const pct = totalPipelineValue > 0
-              ? (c.leads.reduce((s, l) => s + l.expected_revenue, 0) / totalPipelineValue) * 100
-              : 0;
-            return pct > 0 ? (
-              <div key={c.key} title={`${c.key}: ${pct.toFixed(0)}%`}
-                className="rounded-sm" style={{ width: `${pct}%`, background: c.color, opacity: 0.8 }}
-              />
-            ) : null;
-          })}
-        </div>
-        <div className="text-xs text-[#8896aa]">{tabFiltered.length} opportunities</div>
       </div>
 
       {/* Legend */}
@@ -784,6 +884,8 @@ export default function PipelinePage() {
           lead={selected}
           onClose={() => setSelected(null)}
           onUpdate={handleModalUpdate}
+          onAssign={handleAssign}
+          suggestRep={suggestRep}
         />
       )}
 
