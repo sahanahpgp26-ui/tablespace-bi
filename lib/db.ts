@@ -60,6 +60,18 @@ export function getDb(): DbWrapper {
   const raw = new DatabaseSync(DB_PATH);
   _db = new DbWrapper(raw);
   initSchema(_db);
+  // Auto-seed on every fresh DB (handles Vercel's per-lambda /tmp isolation)
+  try {
+    const { count: lc } = _db.prepare('SELECT COUNT(*) as count FROM leads').get() as { count: number };
+    const { count: cc } = _db.prepare('SELECT COUNT(*) as count FROM competitors').get() as { count: number };
+    if (lc === 0 || cc === 0) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const runSeed = require('./seedRunner').default;
+      runSeed(_db);
+    }
+  } catch {
+    // If seed fails, continue — DB will just be empty
+  }
   return _db;
 }
 
