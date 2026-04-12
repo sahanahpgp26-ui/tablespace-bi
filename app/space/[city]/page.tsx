@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import DataSourceTooltip from '@/components/DataSourceTooltip';
 import LastUpdated from '@/components/LastUpdated';
 import ExportButton from '@/components/ExportButton';
 import Link from 'next/link';
+
+const CITIES = ['Bangalore', 'Mumbai', 'Gurugram', 'Hyderabad', 'Pune', 'Chennai'];
 
 interface Centre {
   id: number;
@@ -205,6 +208,7 @@ function SlideOver({ centre, leads, onClose }: { centre: Centre; leads: Lead[]; 
 
 // ─── Main Page ───────────────────────────────────────────────
 export default function CityPage({ params }: { params: { city: string } }) {
+  const router = useRouter();
   const cityName = params.city.charAt(0).toUpperCase() + params.city.slice(1);
   const [centres, setCentres] = useState<Centre[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -245,9 +249,24 @@ export default function CityPage({ params }: { params: { city: string } }) {
 
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-xl font-semibold text-[#dde3ed]">{cityName}</h1>
-            <div className="text-xs text-[#8896aa] mt-0.5">{centres.length} centres · {(totalSqft / 1000).toFixed(0)}K sqft</div>
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-xl font-semibold text-[#dde3ed] flex items-center gap-2">
+                {cityName}
+              </h1>
+              <div className="text-xs text-[#8896aa] mt-0.5">{centres.length} centres · {(totalSqft / 1000).toFixed(0)}K sqft</div>
+            </div>
+            {/* City switcher */}
+            <select
+              value={cityName}
+              onChange={e => router.push(`/space/${e.target.value.toLowerCase()}`)}
+              className="text-xs rounded-md px-2.5 py-1.5 border outline-none cursor-pointer"
+              style={{ background: '#161b23', borderColor: '#1e2530', color: '#8896aa' }}
+            >
+              {CITIES.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
           <ExportButton data={centres.map(c => ({ name: c.name, type: c.centre_type, sqft: c.sqft, seats: c.total_seats, occupied: c.occupied_seats, available: c.available_seats, rev_per_seat: c.revenue_per_seat }))} filename={`centres-${cityName.toLowerCase()}`} />
         </div>

@@ -53,6 +53,8 @@ export default function Sidebar() {
   function isActive(href: string) {
     if (href === '/pipeline') return pathname === '/pipeline' || pathname === '/';
     if (href === '/space/bangalore') return pathname.startsWith('/space/');
+    // Exact match for /geo to avoid it matching /geo/markets
+    if (href === '/geo') return pathname === '/geo';
     return pathname === href || (href !== '/' && pathname.startsWith(href + '/'));
   }
 

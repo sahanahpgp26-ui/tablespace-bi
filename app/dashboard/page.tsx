@@ -139,9 +139,9 @@ const DATA_SOURCES = [
     color: '#38bdf8',
     icon: '🏢',
     sources: [
-      { name: 'JLL India Flex Space Report', desc: 'Market share, pricing benchmarks quarterly', status: 'dummy', field: 'competitors / pricing_history' },
-      { name: 'Colliers India',              desc: 'Competitor occupancy & expansion signals',    status: 'dummy', field: 'market_share_history' },
-      { name: 'Mystery Shopping',            desc: 'Price per seat per city per competitor',      status: 'dummy', field: 'pricing_history' },
+      { name: 'Competitor Profiles',  desc: 'Operator positioning, pricing, occupancy estimates — manually curated', status: 'dummy', field: 'competitors table' },
+      { name: 'Pricing History',      desc: 'Price per seat per city per competitor — mystery shopping + broker intel', status: 'dummy', field: 'pricing_history' },
+      { name: 'Market Share Trends',  desc: 'Quarterly market share across 8 quarters — can wire to broker data feeds', status: 'dummy', field: 'market_share_history' },
     ],
   },
   {
