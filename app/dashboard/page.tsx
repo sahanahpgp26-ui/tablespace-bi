@@ -125,6 +125,18 @@ const STAGE_COLORS: Record<string, string> = {
 
 const PIE_COLORS = ['#f97316', '#38bdf8', '#34d399', '#a78bfa', '#fbbf24', '#f87171'];
 
+// ── City Pie Tooltip ──────────────────────────────────────────
+function CityPieTooltip({ active, payload }: { active?: boolean; payload?: { name: string; value: number; payload: { city: string; revenue: number } }[] }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0];
+  return (
+    <div className="rounded-lg px-3 py-2 text-xs" style={{ background: '#0f1318', border: '1px solid #1e2530', color: '#dde3ed' }}>
+      <div className="font-semibold">{d.payload.city}</div>
+      <div style={{ color: '#34d399' }}>{fmtRevenue(d.payload.revenue)}</div>
+    </div>
+  );
+}
+
 // ── Data Sources Panel ────────────────────────────────────────
 const DATA_SOURCES = [
   {
@@ -362,9 +374,13 @@ export default function DashboardPage() {
         <KpiCard label="Total Potential Sales" value={fmtRevenue(totalPotential)} sub={`${activePipelineCount} active opportunities`} color="#38bdf8"
           tooltip={{ metric: 'Total Potential Sales', source: 'leads table (status=active)', method: 'SUM(expected_revenue) WHERE status=active', confidence: 'Estimated', refreshRate: 'Real-time' }}
           link={{ href: '/pipeline', label: 'View Pipeline →' }} />
-        <KpiCard label="Weighted Pipeline" value={fmtRevenue(weightedPipeline)} sub="Probability-adjusted" color="#f97316"
-          tooltip={{ metric: 'Weighted Pipeline', source: 'leads table (status=active)', method: 'SUM(expected_revenue × stage_probability) — e.g. Negotiation × 80%, Proposal × 65%', confidence: 'Estimated', refreshRate: 'Real-time' }}
-          link={{ href: '/pipeline', label: 'View Pipeline →' }} />
+        <div style={{ position: 'relative' }}>
+          <div className="absolute -top-1.5 right-2 text-[9px] font-semibold px-1.5 py-0.5 rounded-full z-10"
+            style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', border: '1px solid rgba(249,115,22,0.3)' }}>★ Weighted</div>
+          <KpiCard label="Weighted Pipeline" value={fmtRevenue(weightedPipeline)} sub="Probability-adjusted" color="#f97316"
+            tooltip={{ metric: 'Weighted Pipeline', source: 'leads table (status=active)', method: 'SUM(expected_revenue × stage_probability) — e.g. Negotiation × 80%, Proposal × 65%', confidence: 'Estimated', refreshRate: 'Real-time' }}
+            link={{ href: '/pipeline', label: 'View Pipeline →' }} />
+        </div>
         <KpiCard label="Active Opportunities" value={activePipelineCount.toString()} sub="Across all stages"
           tooltip={{ metric: 'Active Opportunities', source: 'leads table', method: 'COUNT(*) WHERE status=active', confidence: 'High', refreshRate: 'Real-time' }} />
         <KpiCard label="Avg Lead Score" value={avgScore.toFixed(0)} sub="Weighted by count" color={scoreColor(avgScore)}
@@ -381,7 +397,10 @@ export default function DashboardPage() {
           </div>
           {data.quarterly.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={data.quarterly} layout="vertical">
+              <BarChart data={[...data.quarterly].sort((a, b) => {
+                const parseQ = (q: string) => { const [qp, yr] = q.split('-'); const qn = parseInt(qp.replace('Q','')) || 1; return parseInt(yr) * 10 + qn; };
+                return parseQ(a.quarter) - parseQ(b.quarter);
+              })} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis type="number" tickFormatter={v => `₹${(v / 100000).toFixed(0)}L`} tick={{ fontSize: 9, fill: '#8896aa' }} />
                 <YAxis type="category" dataKey="quarter" width={55} tick={{ fontSize: 9, fill: '#8896aa' }} />
@@ -468,10 +487,7 @@ export default function DashboardPage() {
                 <Pie data={data.by_city} dataKey="revenue" nameKey="city" cx="50%" cy="50%" innerRadius={38} outerRadius={68}>
                   {data.by_city.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                 </Pie>
-                <Tooltip
-                  contentStyle={{ background: '#0f1318', border: '1px solid #2d3848', borderRadius: '8px' }}
-                  formatter={(v: number) => [fmtRevenue(v), 'Revenue']}
-                />
+                <Tooltip content={<CityPieTooltip />} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex-1 space-y-1">

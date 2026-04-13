@@ -5,6 +5,7 @@ import {
   BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
+
 import InsightCallout from '@/components/InsightCallout';
 import ExportButton from '@/components/ExportButton';
 import LastUpdated from '@/components/LastUpdated';
@@ -170,9 +171,129 @@ function EmployeeCard({ emp, isSelected, onClick }: { emp: Employee; isSelected:
   );
 }
 
+// ─── Individual Report (inline, expanded below detail panel) ──
+function IndividualReport({ emp }: { emp: Employee }) {
+  const [managerNote, setManagerNote] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem(`manager_note_${emp.id}`) || '';
+  });
+  const [noteSaved, setNoteSaved] = useState(false);
+
+  function saveNote() {
+    localStorage.setItem(`manager_note_${emp.id}`, managerNote);
+    setNoteSaved(true);
+    setTimeout(() => setNoteSaved(false), 1500);
+  }
+
+  const stageData = emp.stage_breakdown.map(s => ({
+    stage: s.stage.replace('/Price Quote', '').replace('/Review', '').replace('Id. ', ''),
+    count: s.count,
+    color: STAGE_COLORS[s.stage] || '#8896aa',
+  }));
+
+  const today = Date.now();
+  const thirtyDaysAgo = today - 30 * 86400000;
+
+  return (
+    <div className="card mt-3" style={{ borderRadius: '10px' }}>
+      <div className="text-sm font-semibold text-[#dde3ed] mb-4 flex items-center gap-2">
+        📊 Full Report — {emp.name.split(' ')[0]}
+      </div>
+
+      {/* Win/Loss Summary L30 */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="rounded-lg p-3" style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)' }}>
+          <div className="text-[10px] text-[#4a5568] mb-0.5">Won — L30 Days</div>
+          <div className="font-mono font-bold text-base text-[#34d399]">{fmtRevenue(emp.won_30d_revenue)}</div>
+          <div className="text-[10px] text-[#34d399]">{emp.won_30d_count} deals</div>
+        </div>
+        <div className="rounded-lg p-3" style={{ background: 'rgba(244,63,94,0.07)', border: '1px solid rgba(244,63,94,0.2)' }}>
+          <div className="text-[10px] text-[#4a5568] mb-0.5">Lost — L30 Days</div>
+          <div className="font-mono font-bold text-base text-[#f43f5e]">{fmtRevenue(emp.lost_30d_revenue)}</div>
+          <div className="text-[10px] text-[#f43f5e]">{emp.lost_30d_count} deals</div>
+        </div>
+      </div>
+
+      {/* Stage breakdown mini chart */}
+      {stageData.length > 0 && (
+        <div className="mb-4">
+          <div className="text-xs text-[#8896aa] mb-2">Stage Breakdown</div>
+          <ResponsiveContainer width="100%" height={80}>
+            <BarChart data={stageData} margin={{ left: -20 }}>
+              <XAxis dataKey="stage" tick={{ fontSize: 7, fill: '#8896aa' }} />
+              <YAxis tick={{ fontSize: 7, fill: '#8896aa' }} />
+              <Tooltip contentStyle={{ background: '#0f1318', border: '1px solid #2d3848', borderRadius: '6px', fontSize: '10px' }} />
+              <Bar dataKey="count" radius={[2, 2, 0, 0]}>
+                {stageData.map((s, i) => <Cell key={i} fill={s.color} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Active leads table */}
+      <div className="mb-4">
+        <div className="text-xs text-[#8896aa] mb-2">Active Leads ({emp.leads.length})</div>
+        {emp.leads.length === 0 ? (
+          <div className="text-[11px] text-[#4a5568] text-center py-4">No active leads</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px]">
+              <thead>
+                <tr className="border-b border-[#1e2530]">
+                  {['Company', 'Stage', 'Value', 'Score', 'Days'].map(h => (
+                    <th key={h} className="pb-1.5 text-left text-[#4a5568] font-medium">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {emp.leads.slice(0, 8).map(lead => {
+                  const days = lead.close_date ? Math.ceil((new Date(lead.close_date).getTime() - today) / 86400000) : null;
+                  return (
+                    <tr key={lead.id} className="border-b border-[#1e2530]">
+                      <td className="py-1.5 text-[#dde3ed] font-medium truncate max-w-[80px]">{(lead as { company: string }).company}</td>
+                      <td className="py-1.5">
+                        <span className="badge text-[9px]" style={{ background: `${STAGE_COLORS[lead.stage] || '#8896aa'}20`, color: STAGE_COLORS[lead.stage] || '#8896aa' }}>
+                          {lead.stage.replace('/Price Quote', '').replace('/Review', '').replace('Id. ', '')}
+                        </span>
+                      </td>
+                      <td className="py-1.5 font-mono" style={{ color: '#34d399' }}>{fmtRevenue(lead.expected_revenue)}</td>
+                      <td className="py-1.5 font-mono" style={{ color: scoreColor(lead.score) }}>{lead.score}</td>
+                      <td className="py-1.5 font-mono" style={{ color: days !== null && days < 0 ? '#f87171' : days !== null && days <= 7 ? '#fbbf24' : '#4a5568' }}>
+                        {days !== null ? (days < 0 ? `${Math.abs(days)}d OD` : `${days}d`) : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Manager notes */}
+      <div>
+        <div className="text-xs text-[#8896aa] mb-1.5">Manager Feedback</div>
+        <textarea
+          value={managerNote}
+          onChange={e => setManagerNote(e.target.value)}
+          rows={3}
+          placeholder="Add coaching notes, feedback, or observations…"
+          className="w-full text-[11px] rounded-md px-3 py-2 bg-[#161b23] border border-[#1e2530] text-[#dde3ed] outline-none focus:border-[#f97316] resize-none"
+        />
+        <div className="flex items-center gap-2 mt-1.5">
+          <button onClick={saveNote} className="px-3 py-1 rounded text-[10px] text-white" style={{ background: '#f97316' }}>Save Note</button>
+          {noteSaved && <span className="text-[10px] text-[#34d399]">✓ Saved</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Detail Panel ─────────────────────────────────────────────
 function EmployeeDetail({ emp }: { emp: Employee }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'leads' | 'activity'>('overview');
+  const [showReport, setShowReport] = useState(false);
 
   // Radar chart data
   const radarData = [
@@ -336,6 +457,20 @@ function EmployeeDetail({ emp }: { emp: Employee }) {
           <div className="text-[11px] text-[#4a5568] italic">Activity data from last 30 days · JOIN with activities table</div>
         </div>
       )}
+
+      {/* Full Report button */}
+      <div className="mt-4 pt-3 border-t border-[#1e2530]">
+        <button
+          onClick={() => setShowReport(p => !p)}
+          className="w-full py-2 rounded-md text-xs font-medium transition-colors"
+          style={{
+            background: showReport ? 'rgba(249,115,22,0.15)' : '#161b23',
+            color: showReport ? '#f97316' : '#8896aa',
+            border: `1px solid ${showReport ? 'rgba(249,115,22,0.4)' : '#1e2530'}`,
+          }}
+        >📊 {showReport ? 'Hide Full Report' : 'Full Report'}</button>
+      </div>
+      {showReport && <IndividualReport emp={emp} />}
     </div>
   );
 }
@@ -349,7 +484,7 @@ export default function TeamPage() {
   const [sortBy, setSortBy]       = useState<'attainment' | 'pipeline' | 'leads' | 'score'>('attainment');
 
   useEffect(() => {
-    fetch('/api/team').then(r => r.json()).then(d => {
+    fetch('/api/team', { cache: 'no-store' }).then(r => r.json()).then(d => {
       setTeamData(d.team || []);
       setSummary(d.summary || null);
       if (d.team?.length > 0) setSelected(d.team[0]);

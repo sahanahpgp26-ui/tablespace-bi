@@ -52,8 +52,8 @@ function getAccountServices(company: string, seats: number, score: number) {
   return VAS_CATALOG.filter((_, i) => (h >> i) & 1).slice(0, base + bonus);
 }
 
-function getUtilization(company: string): number {
-  return 60 + (hashCode(company) % 36); // 60–95%
+function getMeetingRoomUsage(company: string): number {
+  return 40 + (hashCode(company) % 56); // 40–95% meeting room adoption
 }
 
 function getDaysToRenewal(closeDate: string): number {
@@ -66,7 +66,7 @@ function getDaysToRenewal(closeDate: string): number {
 function computeUpsellScore(
   lead: Lead,
   services: typeof VAS_CATALOG,
-  utilization: number,
+  meetingRoomUsage: number,
   daysToRenewal: number,
 ): number {
   let s = 15;
@@ -75,8 +75,8 @@ function computeUpsellScore(
   if (daysToRenewal < 30)       s += 28;
   else if (daysToRenewal < 90)  s += 18;
   else if (daysToRenewal < 180) s += 8;
-  if (utilization > 88) s += 18;
-  else if (utilization > 80) s += 10;
+  if (meetingRoomUsage > 88) s += 18;
+  else if (meetingRoomUsage > 80) s += 10;
   const gap = VAS_CATALOG.length - services.length;
   if (gap > 5) s += 12;
   else if (gap > 3) s += 7;
@@ -111,11 +111,11 @@ function initials(name: string) {
 
 // ── Account Detail Modal ──────────────────────────────────────
 function AccountModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
-  const services      = getAccountServices(lead.company, lead.seats_required, lead.score);
-  const untaken       = VAS_CATALOG.filter(s => !services.find(t => t.id === s.id));
-  const utilization   = getUtilization(lead.company);
-  const daysToRenewal = getDaysToRenewal(lead.close_date);
-  const upsellScore   = computeUpsellScore(lead, services, utilization, daysToRenewal);
+  const services        = getAccountServices(lead.company, lead.seats_required, lead.score);
+  const untaken         = VAS_CATALOG.filter(s => !services.find(t => t.id === s.id));
+  const meetingRoomUsage = getMeetingRoomUsage(lead.company);
+  const daysToRenewal   = getDaysToRenewal(lead.close_date);
+  const upsellScore     = computeUpsellScore(lead, services, meetingRoomUsage, daysToRenewal);
   const { label: usLabel, color: usColor, icon: usIcon } = upsellTier(upsellScore);
   const revPerSeat    = lead.seats_required > 0
     ? Math.round(lead.expected_revenue / 12 / lead.seats_required) : 0;
@@ -127,10 +127,10 @@ function AccountModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
     signals.push({ text: `Renewal in ${daysToRenewal} days`, color: daysToRenewal < 30 ? '#f87171' : '#fbbf24', level: daysToRenewal < 30 ? 'Critical' : 'Warning' });
   if (daysToRenewal < 0)
     signals.push({ text: `Renewal ${Math.abs(daysToRenewal)} days overdue`, color: '#f87171', level: 'Overdue' });
-  if (utilization > 85)
-    signals.push({ text: `${utilization}% utilization — approaching capacity, expansion likely`, color: '#f87171', level: 'Capacity' });
-  else if (utilization > 75)
-    signals.push({ text: `${utilization}% utilization — healthy, monitor for expansion trigger`, color: '#fbbf24', level: 'Watch' });
+  if (meetingRoomUsage > 85)
+    signals.push({ text: `${meetingRoomUsage}% meeting room usage — approaching capacity, expansion likely`, color: '#f87171', level: 'Capacity' });
+  else if (meetingRoomUsage > 75)
+    signals.push({ text: `${meetingRoomUsage}% meeting room usage — healthy, monitor for expansion trigger`, color: '#fbbf24', level: 'Watch' });
   if ((lead.seats_required || 0) < 70)
     signals.push({ text: 'Below Growth tier threshold — single upsell converts to higher-value contract', color: '#f97316', level: 'Opportunity' });
   else if ((lead.seats_required || 0) < 150)
@@ -172,7 +172,7 @@ function AccountModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
             { label: 'Annual Contract Value', value: fmtRevenue(lead.expected_revenue), color: '#34d399' },
             { label: 'Seats Contracted', value: (lead.seats_required || 0).toString(), color: '#dde3ed' },
             { label: 'Rev / Seat / Month', value: revPerSeat > 0 ? `₹${revPerSeat.toLocaleString()}` : '—', color: revPerSeat > 0 && revPerSeat < 8000 ? '#f87171' : '#f97316' },
-            { label: 'Seat Utilization', value: `${utilization}%`, color: utilization > 85 ? '#f87171' : utilization > 75 ? '#fbbf24' : '#34d399' },
+            { label: 'Meeting Room Usage', value: `${meetingRoomUsage}%`, color: meetingRoomUsage > 85 ? '#f87171' : meetingRoomUsage > 75 ? '#fbbf24' : '#34d399' },
           ].map(m => (
             <div key={m.label} className="rounded-lg p-3" style={{ background: '#161b23' }}>
               <div className="text-[10px] text-[#4a5568] mb-0.5">{m.label}</div>
@@ -181,17 +181,23 @@ function AccountModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
           ))}
         </div>
 
-        {/* Utilization bar */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between text-[10px] mb-1">
-            <span className="text-[#4a5568]">Seat utilization estimate</span>
-            <span className="font-mono text-[#8896aa]">Source: LinkedIn headcount proxy + floor walk estimate</span>
+        {/* Account Signals row */}
+        <div className="flex gap-2 mb-4 flex-wrap">
+          <div className="flex-1 rounded-lg p-2.5" style={{ background: '#161b23', minWidth: '110px' }}>
+            <div className="text-[9px] text-[#4a5568] mb-0.5">Meeting Room Usage</div>
+            <div className="font-mono font-bold text-sm" style={{ color: meetingRoomUsage > 85 ? '#f87171' : meetingRoomUsage > 75 ? '#fbbf24' : '#34d399' }}>{meetingRoomUsage}%</div>
           </div>
-          <div className="h-3 rounded-full bg-[#161b23] overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{
-              width: `${utilization}%`,
-              background: utilization > 85 ? '#f87171' : utilization > 75 ? '#fbbf24' : '#34d399',
-            }} />
+          <div className="flex-1 rounded-lg p-2.5" style={{ background: '#161b23', minWidth: '110px' }}>
+            <div className="text-[9px] text-[#4a5568] mb-0.5">Last Renewal</div>
+            <div className="font-mono font-bold text-sm text-[#8896aa]">
+              {lead.close_date ? (() => { const months = Math.max(0, Math.floor((Date.now() - new Date(lead.close_date).getTime()) / (1000 * 60 * 60 * 24 * 30))); return months === 0 ? 'This month' : `${months}mo ago`; })() : '—'}
+            </div>
+          </div>
+          <div className="flex-1 rounded-lg p-2.5" style={{ background: '#161b23', minWidth: '110px' }}>
+            <div className="text-[9px] text-[#4a5568] mb-0.5">Growth Signal</div>
+            <div className="font-mono font-bold text-sm" style={{ color: upsellScore >= 70 ? '#f97316' : upsellScore >= 45 ? '#fbbf24' : '#38bdf8' }}>
+              {upsellScore >= 70 ? 'Expanding' : upsellScore >= 45 ? 'Stable' : 'Risk'}
+            </div>
           </div>
         </div>
 
@@ -296,16 +302,16 @@ function AccountModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
 }
 
 // ── Upsell Score breakdown tooltip ───────────────────────────
-function ScoreBreakdown({ lead, services, utilization, daysToRenewal }: {
-  lead: Lead; services: typeof VAS_CATALOG; utilization: number; daysToRenewal: number;
+function ScoreBreakdown({ lead, services, meetingRoomUsage, daysToRenewal }: {
+  lead: Lead; services: typeof VAS_CATALOG; meetingRoomUsage: number; daysToRenewal: number;
 }) {
   const items = [
-    { label: 'Base',               pts: 15 },
-    { label: 'Tier headroom',      pts: (lead.seats_required || 0) < 70 ? 22 : (lead.seats_required || 0) < 150 ? 12 : 0 },
-    { label: 'Renewal proximity',  pts: daysToRenewal < 30 ? 28 : daysToRenewal < 90 ? 18 : daysToRenewal < 180 ? 8 : 0 },
-    { label: 'Utilization signal', pts: utilization > 88 ? 18 : utilization > 80 ? 10 : 0 },
-    { label: 'Service gap',        pts: (VAS_CATALOG.length - services.length) > 5 ? 12 : (VAS_CATALOG.length - services.length) > 3 ? 7 : 0 },
-    { label: 'Pricing delta',      pts: (() => { const r = (lead.seats_required || 0) > 0 ? (lead.expected_revenue || 0) / 12 / lead.seats_required : 0; return r > 0 && r < 8000 ? 14 : 0; })() },
+    { label: 'Base',                   pts: 15 },
+    { label: 'Tier headroom',          pts: (lead.seats_required || 0) < 70 ? 22 : (lead.seats_required || 0) < 150 ? 12 : 0 },
+    { label: 'Renewal proximity',      pts: daysToRenewal < 30 ? 28 : daysToRenewal < 90 ? 18 : daysToRenewal < 180 ? 8 : 0 },
+    { label: 'Meeting room adoption',  pts: meetingRoomUsage > 88 ? 18 : meetingRoomUsage > 80 ? 10 : 0 },
+    { label: 'Service gap',            pts: (VAS_CATALOG.length - services.length) > 5 ? 12 : (VAS_CATALOG.length - services.length) > 3 ? 7 : 0 },
+    { label: 'Pricing delta',          pts: (() => { const r = (lead.seats_required || 0) > 0 ? (lead.expected_revenue || 0) / 12 / lead.seats_required : 0; return r > 0 && r < 8000 ? 14 : 0; })() },
   ].filter(i => i.pts > 0);
   return (
     <div className="absolute bottom-full left-0 mb-1 z-30 w-44 p-2 rounded-lg shadow-xl text-[10px]"
@@ -325,37 +331,61 @@ export default function AccountsPage() {
   const [leads, setLeads]       = useState<Lead[]>([]);
   const [loading, setLoading]   = useState(true);
   const [selected, setSelected] = useState<Lead | null>(null);
-  const [sortBy, setSortBy]     = useState<'upsell' | 'acv' | 'renewal' | 'utilization'>('upsell');
+  const [sortBy, setSortBy]     = useState<'upsell' | 'acv' | 'renewal' | 'meetingroom'>('upsell');
   const [cityFilter, setCityFilter] = useState('All');
+  const [quarterFilter, setQuarterFilter] = useState<string[]>(['all']);
   const [hoverScore, setHoverScore] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/leads?status=won').then(r => r.json()).then(d => { setLeads(d); setLoading(false); });
   }, []);
 
+  function getQuarterLabel(dateStr: string) {
+    const d = new Date(dateStr);
+    const q = Math.ceil((d.getMonth() + 1) / 3);
+    return `Q${q} ${d.getFullYear()}`;
+  }
+
+  function getLast4Quarters(): string[] {
+    const now = new Date();
+    const quarters: string[] = [];
+    let year = now.getFullYear();
+    let q = Math.ceil((now.getMonth() + 1) / 3);
+    for (let i = 0; i < 4; i++) {
+      quarters.push(`Q${q} ${year}`);
+      q--;
+      if (q < 1) { q = 4; year--; }
+    }
+    return quarters;
+  }
+
   const enriched = useMemo(() => leads.map(lead => {
-    const services      = getAccountServices(lead.company, lead.seats_required, lead.score);
-    const utilization   = getUtilization(lead.company);
-    const daysToRenewal = getDaysToRenewal(lead.close_date);
-    const upsellScore   = computeUpsellScore(lead, services, utilization, daysToRenewal);
-    const tier          = upsellTier(upsellScore);
-    const revPerSeat    = (lead.seats_required || 0) > 0
+    const services         = getAccountServices(lead.company, lead.seats_required, lead.score);
+    const meetingRoomUsage = getMeetingRoomUsage(lead.company);
+    const daysToRenewal    = getDaysToRenewal(lead.close_date);
+    const upsellScore      = computeUpsellScore(lead, services, meetingRoomUsage, daysToRenewal);
+    const tier             = upsellTier(upsellScore);
+    const revPerSeat       = (lead.seats_required || 0) > 0
       ? Math.round((lead.expected_revenue || 0) / 12 / lead.seats_required) : 0;
-    const vasPotential  = VAS_CATALOG.filter(s => !services.find(t => t.id === s.id))
+    const vasPotential     = VAS_CATALOG.filter(s => !services.find(t => t.id === s.id))
       .reduce((s, v) => s + v.monthly, 0) * 12;
-    return { ...lead, services, utilization, daysToRenewal, upsellScore, ...tier, revPerSeat, vasPotential };
+    const quarterLabel     = lead.close_date ? getQuarterLabel(lead.close_date) : '';
+    return { ...lead, services, meetingRoomUsage, daysToRenewal, upsellScore, ...tier, revPerSeat, vasPotential, quarterLabel };
   }), [leads]);
 
   const filtered = useMemo(() => {
-    const list = cityFilter === 'All' ? enriched : enriched.filter(a => a.city === cityFilter);
+    let list = cityFilter === 'All' ? enriched : enriched.filter(a => a.city === cityFilter);
+    if (!quarterFilter.includes('all') && quarterFilter.length > 0) {
+      list = list.filter(a => quarterFilter.includes(a.quarterLabel));
+    }
     return [...list].sort((a, b) => {
-      if (sortBy === 'upsell')       return b.upsellScore - a.upsellScore;
-      if (sortBy === 'acv')          return (b.expected_revenue || 0) - (a.expected_revenue || 0);
-      if (sortBy === 'renewal')      return a.daysToRenewal - b.daysToRenewal;
-      if (sortBy === 'utilization')  return b.utilization - a.utilization;
+      if (sortBy === 'upsell')      return b.upsellScore - a.upsellScore;
+      if (sortBy === 'acv')         return (b.expected_revenue || 0) - (a.expected_revenue || 0);
+      if (sortBy === 'renewal')     return a.daysToRenewal - b.daysToRenewal;
+      if (sortBy === 'meetingroom') return b.meetingRoomUsage - a.meetingRoomUsage;
       return 0;
     });
-  }, [enriched, cityFilter, sortBy]);
+  }, [enriched, cityFilter, quarterFilter, sortBy]);
 
   const totalACV       = enriched.reduce((s, a) => s + (a.expected_revenue || 0), 0);
   const avgUpsell      = enriched.length ? Math.round(enriched.reduce((s, a) => s + a.upsellScore, 0) / enriched.length) : 0;
@@ -387,7 +417,7 @@ export default function AccountsPage() {
           </div>
         </div>
         <ExportButton
-          data={enriched.map(a => ({ company: a.company, city: a.city, seats: a.seats_required, acv: a.expected_revenue, rev_per_seat: a.revPerSeat, upsell_score: a.upsellScore, days_to_renewal: a.daysToRenewal, utilization: a.utilization, vas_potential: a.vasPotential, services_count: a.services.length }))}
+          data={enriched.map(a => ({ company: a.company, city: a.city, seats: a.seats_required, acv: a.expected_revenue, rev_per_seat: a.revPerSeat, upsell_score: a.upsellScore, days_to_renewal: a.daysToRenewal, meeting_room_usage: a.meetingRoomUsage, vas_potential: a.vasPotential, services_count: a.services.length }))}
           filename="accounts"
         />
       </div>
@@ -418,7 +448,7 @@ export default function AccountsPage() {
           {[
             { signal: 'Renewal proximity', weight: '28 pts', desc: '<30 days = highest urgency' },
             { signal: 'Tier headroom', weight: '22 pts', desc: 'seats below Growth/Enterprise threshold' },
-            { signal: 'Seat utilization', weight: '18 pts', desc: '>88% = expansion pressure imminent' },
+            { signal: 'Meeting room adoption', weight: '18 pts', desc: '>88% = expansion pressure imminent' },
             { signal: 'Service attach gap', weight: '12 pts', desc: 'popular VAS not yet activated' },
             { signal: 'Pricing delta', weight: '14 pts', desc: 'paying below ₹8,000/seat floor' },
           ].map(s => (
@@ -429,6 +459,30 @@ export default function AccountsPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Quarter filter */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <span className="text-[10px] text-[#4a5568]">Quarter:</span>
+        {(['all', ...getLast4Quarters()] as const).map(q => {
+          const active = q === 'all' ? quarterFilter.includes('all') : quarterFilter.includes(q as string);
+          return (
+            <button key={q} onClick={() => {
+              if (q === 'all') { setQuarterFilter(['all']); return; }
+              setQuarterFilter(prev => {
+                const without = prev.filter(x => x !== 'all');
+                if (without.includes(q as string)) {
+                  const next = without.filter(x => x !== q);
+                  return next.length === 0 ? ['all'] : next;
+                }
+                return [...without, q as string];
+              });
+            }}
+              className="px-2.5 py-1 rounded text-xs transition-all"
+              style={{ background: active ? 'rgba(56,189,248,0.15)' : '#161b23', color: active ? '#38bdf8' : '#8896aa', border: `1px solid ${active ? 'rgba(56,189,248,0.4)' : '#1e2530'}` }}
+            >{q === 'all' ? 'All' : q}</button>
+          );
+        })}
       </div>
 
       {/* Filters + sort */}
@@ -443,8 +497,8 @@ export default function AccountsPage() {
         </div>
         <div className="ml-auto flex items-center gap-1 text-xs text-[#4a5568]">
           Sort:
-          {([['upsell','🔥 Upsell'],['acv','₹ ACV'],['renewal','⏰ Renewal'],['utilization','📊 Util']] as const).map(([k, lbl]) => (
-            <button key={k} onClick={() => setSortBy(k)}
+          {([['upsell','🔥 Upsell'],['acv','₹ ACV'],['renewal','⏰ Renewal'],['meetingroom','🏠 Rooms']] as const).map(([k, lbl]) => (
+            <button key={k} onClick={() => setSortBy(k as 'upsell' | 'acv' | 'renewal' | 'meetingroom')}
               className="px-2 py-1 rounded text-xs"
               style={{ background: sortBy === k ? 'rgba(249,115,22,0.12)' : 'transparent', color: sortBy === k ? '#f97316' : '#8896aa', border: `1px solid ${sortBy === k ? 'rgba(249,115,22,0.3)' : 'transparent'}` }}
             >{lbl}</button>
@@ -483,7 +537,7 @@ export default function AccountsPage() {
                     <div className="font-mono font-bold text-xl cursor-help" style={{ color: account.color }}>{account.upsellScore}</div>
                     <div className="text-[9px]" style={{ color: account.color }}>{account.icon} {account.label}</div>
                     {hoverScore === account.id && (
-                      <ScoreBreakdown lead={account} services={account.services} utilization={account.utilization} daysToRenewal={account.daysToRenewal} />
+                      <ScoreBreakdown lead={account} services={account.services} meetingRoomUsage={account.meetingRoomUsage} daysToRenewal={account.daysToRenewal} />
                     )}
                   </div>
                 </div>
@@ -503,19 +557,21 @@ export default function AccountsPage() {
                   ))}
                 </div>
 
-                {/* Utilization bar */}
-                <div className="mb-3">
-                  <div className="flex justify-between text-[10px] mb-0.5">
-                    <span className="text-[#4a5568]">Seat utilization</span>
-                    <span className="font-mono" style={{ color: account.utilization > 85 ? '#f87171' : account.utilization > 75 ? '#fbbf24' : '#34d399' }}>
-                      {account.utilization}%
-                    </span>
+                {/* Metric chips */}
+                <div className="flex gap-1.5 mb-3">
+                  <div className="flex-1 rounded p-1.5" style={{ background: '#161b23' }}>
+                    <div className="text-[9px] text-[#4a5568]">Mtg Rooms</div>
+                    <div className="font-mono text-[10px] font-semibold" style={{ color: account.meetingRoomUsage > 85 ? '#f87171' : account.meetingRoomUsage > 70 ? '#fbbf24' : '#34d399' }}>{account.meetingRoomUsage}%</div>
                   </div>
-                  <div className="h-1.5 rounded-full bg-[#1e2530] overflow-hidden">
-                    <div className="h-full rounded-full" style={{
-                      width: `${account.utilization}%`,
-                      background: account.utilization > 85 ? '#f87171' : account.utilization > 75 ? '#fbbf24' : '#34d399',
-                    }} />
+                  <div className="flex-1 rounded p-1.5" style={{ background: '#161b23' }}>
+                    <div className="text-[9px] text-[#4a5568]">Last Renewal</div>
+                    <div className="font-mono text-[10px] font-semibold text-[#8896aa]">{account.close_date ? (() => { const m = Math.max(0, Math.floor((Date.now() - new Date(account.close_date).getTime()) / (1000 * 60 * 60 * 24 * 30))); return m === 0 ? 'This mo' : `${m}mo ago`; })() : '—'}</div>
+                  </div>
+                  <div className="flex-1 rounded p-1.5" style={{ background: '#161b23' }}>
+                    <div className="text-[9px] text-[#4a5568]">Growth</div>
+                    <div className="font-mono text-[10px] font-semibold" style={{ color: account.upsellScore >= 70 ? '#f97316' : account.upsellScore >= 45 ? '#fbbf24' : '#38bdf8' }}>
+                      {account.upsellScore >= 70 ? 'Expanding' : account.upsellScore >= 45 ? 'Stable' : 'Risk'}
+                    </div>
                   </div>
                 </div>
 
@@ -543,8 +599,13 @@ export default function AccountsPage() {
                       style={{ background: aColor, color: '#080d14' }}>{initials(account.assigned_to)}</div>
                     <span className="text-[10px] text-[#4a5568]">{account.assigned_to?.split(' ')[0]}</span>
                   </div>
-                  <div className="text-[9px] text-[#4a5568]">
-                    VAS gap: <span className="font-mono" style={{ color: '#a78bfa' }}>{fmtRevenue(account.vasPotential)}/yr</span>
+                  <div className="flex items-center gap-1.5">
+                    {account.quarterLabel && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: '#1e2530', color: '#4a5568' }}>{account.quarterLabel}</span>
+                    )}
+                    <div className="text-[9px] text-[#4a5568]">
+                      VAS: <span className="font-mono" style={{ color: '#a78bfa' }}>{fmtRevenue(account.vasPotential)}/yr</span>
+                    </div>
                   </div>
                 </div>
               </div>

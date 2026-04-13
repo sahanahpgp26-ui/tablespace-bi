@@ -339,14 +339,18 @@ export default function CityPage({ params }: { params: { city: string } }) {
           </div>
         )}
 
-        {/* Type filter */}
-        <div className="flex gap-2 mb-5">
-          {['All', 'IT Park', 'CBD', 'Premium', 'Emerging'].map(t => (
-            <button key={t} onClick={() => setTypeFilter(t)}
-              className="px-3 py-1 rounded text-xs transition-all"
-              style={{ background: typeFilter === t ? `${TYPE_COLORS[t] || '#f97316'}20` : '#161b23', color: typeFilter === t ? (TYPE_COLORS[t] || '#f97316') : '#8896aa', border: `1px solid ${typeFilter === t ? (TYPE_COLORS[t] || '#f97316') + '40' : '#1e2530'}` }}
-            >{t}</button>
-          ))}
+        {/* Type filter — dropdown */}
+        <div className="flex items-center gap-2 mb-5">
+          <span className="text-[10px] text-[#4a5568]">Type:</span>
+          <select
+            value={typeFilter}
+            onChange={e => setTypeFilter(e.target.value)}
+            className="filter-sel text-xs rounded-md px-3 py-1.5 bg-[#161b23] border border-[#1e2530] text-[#dde3ed] outline-none"
+          >
+            {['All', 'IT Park', 'CBD', 'Premium', 'Emerging'].map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
         </div>
 
         {/* Centre cards grid */}

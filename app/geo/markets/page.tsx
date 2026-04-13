@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ZAxis, ReferenceLine, Label,
+  ResponsiveContainer, ZAxis, ReferenceLine, ReferenceArea, Label,
 } from 'recharts';
 import ExportButton from '@/components/ExportButton';
 import InsightCallout from '@/components/InsightCallout';
@@ -306,6 +306,11 @@ export default function MarketsPage() {
             <ZAxis type="number" dataKey="z" range={[40, 240]} name="Nightlight Index" />
             <Tooltip content={<ScatterTooltip />} />
 
+            {/* Target zone highlight — top-right quadrant */}
+            <ReferenceArea x1={60} x2={100} y1={60} y2={100}
+              fill="rgba(52,211,153,0.06)" stroke="rgba(52,211,153,0.2)" strokeDasharray="4 4"
+              label={{ value: '🎯 Target Zone', position: 'insideTopRight', style: { fontSize: 10, fill: '#34d399' } }}
+            />
             {/* Reference lines for quadrants */}
             <ReferenceLine x={50} stroke="#1e2530" strokeDasharray="4 4" />
             <ReferenceLine y={50} stroke="#1e2530" strokeDasharray="4 4" />

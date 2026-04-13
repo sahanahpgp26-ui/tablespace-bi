@@ -4,7 +4,7 @@ import { useState } from 'react';
 import {
   User, Bell, Database, Shield, Palette, Download,
   Globe, RefreshCw, Check, ChevronRight, ExternalLink,
-  Eye, EyeOff, Zap, AlertTriangle
+  Eye, EyeOff, Zap, AlertTriangle, Trash2, Plus, GitBranch
 } from 'lucide-react';
 import LastUpdated from '@/components/LastUpdated';
 
@@ -613,11 +613,128 @@ function DeploymentInfo() {
   );
 }
 
+// ── Pipeline Configuration ────────────────────────────────────
+const DEFAULT_PIPELINE_STAGES = [
+  { key: 'Qualifying',  label: 'Qualifying',  prob: 20, color: '#38bdf8' },
+  { key: 'Discovery',   label: 'Discovery',   prob: 35, color: '#a78bfa' },
+  { key: 'Proposal',    label: 'Proposal',    prob: 65, color: '#fbbf24' },
+  { key: 'Negotiation', label: 'Negotiation', prob: 80, color: '#f97316' },
+  { key: 'Closed Won',  label: 'Closed Won',  prob: 100, color: '#34d399' },
+  { key: 'Closed Lost', label: 'Closed Lost', prob: 0,   color: '#f43f5e' },
+];
+
+function PipelineSettings() {
+  const [stages, setStages] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_PIPELINE_STAGES;
+    try {
+      const stored = localStorage.getItem('pipelineStages');
+      return stored ? JSON.parse(stored) : DEFAULT_PIPELINE_STAGES;
+    } catch { return DEFAULT_PIPELINE_STAGES; }
+  });
+  const [saved, setSaved] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+
+  function save() {
+    localStorage.setItem('pipelineStages', JSON.stringify(stages));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  function updateProb(key: string, prob: number) {
+    setStages((prev: typeof DEFAULT_PIPELINE_STAGES) => prev.map(s => s.key === key ? { ...s, prob } : s));
+  }
+
+  function deleteStage(key: string) {
+    setStages((prev: typeof DEFAULT_PIPELINE_STAGES) => prev.filter(s => s.key !== key));
+  }
+
+  function addStage() {
+    const label = newLabel.trim();
+    if (!label) return;
+    setStages((prev: typeof DEFAULT_PIPELINE_STAGES) => [...prev, { key: label, label, prob: 50, color: '#8896aa' }]);
+    setNewLabel('');
+  }
+
+  return (
+    <SectionCard title="Pipeline Configuration" icon={GitBranch}>
+      <div className="mb-3 p-3 rounded-lg text-xs text-[#8896aa] border" style={{ background: '#161b23', borderColor: '#38bdf820' }}>
+        <span className="text-[#38bdf8]">ℹ Note</span> — Stage changes apply after page refresh. Edits are saved to localStorage and persist across sessions.
+      </div>
+      <table className="w-full text-xs mb-4">
+        <thead>
+          <tr className="border-b border-[#1e2530]">
+            {['Stage', 'Probability (%)', 'Color', ''].map(h => (
+              <th key={h} className="pb-2 text-left text-[#4a5568] font-medium text-[10px]">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {(stages as typeof DEFAULT_PIPELINE_STAGES).map(stage => {
+            const isProtected = stage.key === 'Closed Won' || stage.key === 'Closed Lost';
+            return (
+              <tr key={stage.key} className="border-b border-[#1e2530]">
+                <td className="py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: stage.color }} />
+                    <span className="text-[#dde3ed]">{stage.label}</span>
+                    {isProtected && <span className="text-[9px] px-1 py-0.5 rounded" style={{ background: '#1e2530', color: '#4a5568' }}>protected</span>}
+                  </div>
+                </td>
+                <td className="py-2 pr-4">
+                  <input
+                    type="number" min={0} max={100} value={stage.prob}
+                    onChange={e => updateProb(stage.key, Math.max(0, Math.min(100, Number(e.target.value))))}
+                    className="w-16 text-xs rounded px-2 py-1 bg-[#0f1318] border border-[#1e2530] text-[#dde3ed] outline-none focus:border-[#f97316] font-mono"
+                  />
+                </td>
+                <td className="py-2 pr-4">
+                  <span className="text-[10px] font-mono" style={{ color: stage.color }}>{stage.color}</span>
+                </td>
+                <td className="py-2">
+                  {!isProtected && (
+                    <button onClick={() => deleteStage(stage.key)} className="text-[#4a5568] hover:text-[#f87171] transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* Add stage */}
+      <div className="flex gap-2 mb-4">
+        <input
+          value={newLabel} onChange={e => setNewLabel(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addStage()}
+          placeholder="New stage name…"
+          className="flex-1 text-xs rounded px-3 py-1.5 bg-[#161b23] border border-[#1e2530] text-[#dde3ed] outline-none focus:border-[#f97316]"
+        />
+        <button onClick={addStage} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-[#1e2530] text-[#8896aa] hover:text-[#dde3ed] hover:border-[#2d3848] transition-colors">
+          <Plus size={12} />Add
+        </button>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={save} className="px-4 py-1.5 rounded-md text-xs font-medium text-white" style={{ background: '#f97316' }}>
+          Save Stages
+        </button>
+        <button onClick={() => setStages(DEFAULT_PIPELINE_STAGES)} className="px-3 py-1.5 rounded-md text-xs border border-[#1e2530] text-[#8896aa] hover:text-[#dde3ed]">
+          Reset to defaults
+        </button>
+        {saved && <SavedBadge />}
+      </div>
+    </SectionCard>
+  );
+}
+
 // ── Nav tabs ──────────────────────────────────────────────────
 const TABS = [
   { key: 'profile',     label: 'Profile',     icon: User },
   { key: 'notifications',label: 'Notifications',icon: Bell },
   { key: 'apis',        label: 'API Keys',    icon: Zap },
+  { key: 'pipeline',    label: 'Pipeline',    icon: GitBranch },
   { key: 'data',        label: 'Data',        icon: Database },
   { key: 'export',      label: 'Export',      icon: Download },
   { key: 'appearance',  label: 'Appearance',  icon: Palette },
@@ -668,6 +785,7 @@ export default function SettingsPage() {
           {activeTab === 'profile'       && <ProfileSettings />}
           {activeTab === 'notifications' && <NotificationSettings />}
           {activeTab === 'apis'          && <APIConnections />}
+          {activeTab === 'pipeline'      && <PipelineSettings />}
           {activeTab === 'data'          && <DataSettings />}
           {activeTab === 'export'        && <ExportSettings />}
           {activeTab === 'appearance'    && <AppearanceSettings />}

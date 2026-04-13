@@ -45,7 +45,7 @@ export function GET() {
       END as quarter,
       SUM(expected_revenue) as revenue,
       COUNT(*) as deals
-    FROM leads WHERE status = 'won'
+    FROM leads WHERE status = 'won' AND close_date <= date('now')
     GROUP BY quarter ORDER BY close_date
   `).all();
 

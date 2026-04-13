@@ -286,7 +286,12 @@ function LeadCard({
         )}
       </div>
 
-      <div className="text-[11px] text-[#8896aa] mb-1.5 ml-4">{lead.contact_name} · {lead.city}</div>
+      <div className="text-[11px] text-[#8896aa] mb-0.5 ml-4">{lead.contact_name} · {lead.city}</div>
+      {lead.last_activity && (
+        <div className="text-[10px] ml-4 mb-1.5" style={{ color: '#4a5568' }}>
+          Last contact: {new Date(lead.last_activity).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+        </div>
+      )}
 
       {/* Revenue + weighted expected */}
       <div className="flex items-center justify-between text-[11px] ml-4 mb-1">
@@ -336,6 +341,14 @@ function LeadCard({
       <div className="ml-4 flex items-center gap-1 flex-wrap">
         <span className="badge text-[10px]" style={{ background: '#1e2530', color: '#8896aa' }}>{lead.seats_required}seats</span>
         <span className="badge text-[10px]" style={{ background: '#1e2530', color: '#8896aa' }}>{lead.source}</span>
+        {stale && (
+          <span className="badge text-[9px]" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>⚡ Follow up</span>
+        )}
+        {lead.created_at && (
+          <span className="badge text-[10px]" style={{ background: '#1e2530', color: '#4a5568' }} title="Date added">
+            + {new Date(lead.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+          </span>
+        )}
         {/* Assignee — click to reassign */}
         <div className="relative ml-auto" onClick={e => e.stopPropagation()}>
           <button
@@ -389,6 +402,8 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
   const [status, setStatus] = useState(lead.status || 'active');
   const [taskInput, setTaskInput]  = useState('');
   const [eventInput, setEventInput] = useState('');
+  const [taskDate, setTaskDate]   = useState('');
+  const [eventDate, setEventDate] = useState('');
   const [tasks, setTasks]   = useState<string[]>([]);
   const [events, setEvents] = useState<string[]>([]);
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to);
@@ -463,12 +478,13 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
         {/* Details grid */}
         <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
           {[
-            { k: 'City',         v: lead.city },
-            { k: 'Source',       v: lead.source },
-            { k: 'Account Type', v: lead.account_type },
-            { k: 'Close Date',   v: lead.close_date ? new Date(lead.close_date).toLocaleDateString('en-IN') : '—' },
-            { k: 'Budget/seat',  v: lead.seats_required ? fmtRevenue(lead.expected_revenue / 12 / lead.seats_required) + '/mo' : '—' },
-            { k: 'Score',        v: lead.score.toString() },
+            { k: 'City',                  v: lead.city },
+            { k: 'Source',                v: lead.source },
+            { k: 'Account Type',          v: lead.account_type },
+            { k: 'Expected Close Date',   v: lead.close_date ? new Date(lead.close_date).toLocaleDateString('en-IN') : '—' },
+            { k: 'Budget/seat',           v: lead.seats_required ? fmtRevenue(lead.expected_revenue / 12 / lead.seats_required) + '/mo' : '—' },
+            { k: 'Score',                 v: lead.score.toString() },
+            { k: 'Added',                 v: lead.created_at ? new Date(lead.created_at).toLocaleDateString('en-IN') : '—' },
           ].map(r => (
             <div key={r.k}>
               <span className="text-[10px] text-[#4a5568] block">{r.k}</span>
@@ -508,11 +524,11 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
 
         {/* Stage */}
         <div className="mb-3">
-          <label className="text-xs text-[#8896aa] block mb-1.5">Stage <span className="text-[#4a5568] font-mono">(probability: {DB_STAGE_PROB[stage] ?? '?'}%)</span></label>
+          <label className="text-xs text-[#8896aa] block mb-1.5">Stage <span className="text-[#4a5568] font-mono">(probability: {KANBAN_COLUMNS.find(c => c.dbStage === stage)?.prob ?? DB_STAGE_PROB[stage] ?? '?'}%)</span></label>
           <select value={stage} onChange={e => setStage(e.target.value)}
             className="w-full text-sm rounded-md px-3 py-2 bg-[#161b23] border border-[#1e2530] text-[#dde3ed] outline-none focus:border-[#f97316]"
           >
-            {ALL_STAGES_DB.map(s => <option key={s} value={s}>{s} — {DB_STAGE_PROB[s] ?? 0}%</option>)}
+            {KANBAN_COLUMNS.map(col => <option key={col.key} value={col.dbStage}>{col.label} — {col.prob}%</option>)}
           </select>
         </div>
 
@@ -538,14 +554,20 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
         <div className="grid grid-cols-2 gap-2">
           <div>
             <div className="text-[10px] text-[#4a5568] mb-1">+ New Task</div>
-            <div className="flex gap-1">
+            <div className="flex gap-1 mb-1">
               <input
                 value={taskInput} onChange={e => setTaskInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && taskInput.trim()) { setTasks(p => [...p, taskInput.trim()]); setTaskInput(''); } }}
+                onKeyDown={e => { if (e.key === 'Enter' && taskInput.trim()) { setTasks(p => [...p, taskDate ? `${taskInput.trim()} (${taskDate})` : taskInput.trim()]); setTaskInput(''); setTaskDate(''); } }}
                 placeholder="Task description…"
                 className="flex-1 text-[11px] px-2 py-1 rounded bg-[#161b23] border border-[#1e2530] text-[#dde3ed] outline-none focus:border-[#f97316]"
               />
-              <button onClick={() => { if (taskInput.trim()) { setTasks(p => [...p, taskInput.trim()]); setTaskInput(''); } }}
+              <input type="date" value={taskDate} onChange={e => setTaskDate(e.target.value)}
+                className="text-[10px] w-28 px-1 py-1 rounded bg-[#161b23] border border-[#1e2530] text-[#8896aa] outline-none"
+              />
+            </div>
+            <div className="flex gap-1">
+              <div className="flex-1" />
+              <button onClick={() => { if (taskInput.trim()) { setTasks(p => [...p, taskDate ? `${taskInput.trim()} (${taskDate})` : taskInput.trim()]); setTaskInput(''); setTaskDate(''); } }}
                 className="px-2 py-1 text-[10px] rounded border border-[#1e2530] text-[#8896aa] hover:text-[#dde3ed]"
               >Add</button>
             </div>
@@ -557,14 +579,20 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
           </div>
           <div>
             <div className="text-[10px] text-[#4a5568] mb-1">+ New Event</div>
-            <div className="flex gap-1">
+            <div className="flex gap-1 mb-1">
               <input
                 value={eventInput} onChange={e => setEventInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && eventInput.trim()) { setEvents(p => [...p, eventInput.trim()]); setEventInput(''); } }}
+                onKeyDown={e => { if (e.key === 'Enter' && eventInput.trim()) { setEvents(p => [...p, eventDate ? `${eventInput.trim()} (${eventDate})` : eventInput.trim()]); setEventInput(''); setEventDate(''); } }}
                 placeholder="Event title…"
                 className="flex-1 text-[11px] px-2 py-1 rounded bg-[#161b23] border border-[#1e2530] text-[#dde3ed] outline-none focus:border-[#f97316]"
               />
-              <button onClick={() => { if (eventInput.trim()) { setEvents(p => [...p, eventInput.trim()]); setEventInput(''); } }}
+              <input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)}
+                className="text-[10px] w-28 px-1 py-1 rounded bg-[#161b23] border border-[#1e2530] text-[#8896aa] outline-none"
+              />
+            </div>
+            <div className="flex gap-1">
+              <div className="flex-1" />
+              <button onClick={() => { if (eventInput.trim()) { setEvents(p => [...p, eventDate ? `${eventInput.trim()} (${eventDate})` : eventInput.trim()]); setEventInput(''); setEventDate(''); } }}
                 className="px-2 py-1 text-[10px] rounded border border-[#1e2530] text-[#8896aa] hover:text-[#dde3ed]"
               >Add</button>
             </div>
@@ -630,7 +658,7 @@ function KanbanColumn({
       {/* Totals */}
       <div className="px-1 mb-1.5 flex items-center justify-between text-[10px]">
         <span className="font-mono text-[#8896aa]">{fmtRevenue(total)}</span>
-        <span className="font-mono text-[#4a5568]" title="Weighted expected value">≈{fmtRevenue(weighted)}</span>
+        <span className="font-mono font-semibold" style={{ color: '#f97316' }} title="Probability-weighted expected value">≈{fmtRevenue(weighted)} <span style={{ color: '#4a5568', fontWeight: 400 }}>wtd</span></span>
       </div>
 
       {/* Drop zone */}
@@ -667,12 +695,12 @@ function KanbanColumn({
   );
 }
 
-// ── Existing Accounts View ────────────────────────────────────
+// ── Current Quarter Wins View ─────────────────────────────────
 function ExistingAccountsView({ leads }: { leads: Lead[] }) {
   if (leads.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-56 text-center">
-        <div className="text-4xl mb-3">🏢</div>
+        <div className="text-4xl mb-3">🏆</div>
         <div className="text-[#8896aa] text-sm font-medium mb-1">No closed accounts yet</div>
         <div className="text-[#4a5568] text-xs">Drag leads to Closed Won to see them here for cross-sell & upsell tracking</div>
       </div>
@@ -901,7 +929,7 @@ export default function PipelinePage() {
                 background: viewMode === mode ? 'rgba(249,115,22,0.15)' : 'transparent',
                 color: viewMode === mode ? '#f97316' : '#8896aa',
               }}
-            >{mode === 'accounts' ? '🏢 Existing Accounts' : '📋 Kanban'}</button>
+            >{mode === 'accounts' ? '🏆 Current Quarter Wins' : '📋 Kanban'}</button>
           ))}
         </div>
         <div className="text-[10px] text-[#4a5568]">{tabFiltered.length} records</div>
