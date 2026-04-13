@@ -1,45 +1,59 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Plus, RefreshCw, Filter, Star, AlertCircle, Clock, Edit2, Check, X, Info, GripVertical, ChevronDown, User } from 'lucide-react';
+import { Plus, RefreshCw, Filter, AlertCircle, Clock, Edit2, Check, X, GripVertical, ChevronDown } from 'lucide-react';
 import ExportButton from '@/components/ExportButton';
 import LastUpdated from '@/components/LastUpdated';
 import InsightCallout from '@/components/InsightCallout';
 import Link from 'next/link';
 
-// ── Stage config with Salesforce-style probabilities ──────────
-const KANBAN_STAGES = [
-  { key: 'Prospecting',         label: 'Prospecting',      color: '#8896aa', prob: 10  },
-  { key: 'Qualification',       label: 'Qualification',    color: '#38bdf8', prob: 20  },
-  { key: 'Needs Analysis',      label: 'Needs Analysis',   color: '#a78bfa', prob: 25  },
-  { key: 'Value Proposition',   label: 'Value Prop',       color: '#60a5fa', prob: 35  },
-  { key: 'Id. Decision Makers', label: 'Decision Makers',  color: '#c084fc', prob: 40  },
-  { key: 'Perception Analysis', label: 'Perception',       color: '#e879f9', prob: 50  },
-  { key: 'Proposal/Price Quote',label: 'Proposal',         color: '#fbbf24', prob: 65  },
-  { key: 'Negotiation/Review',  label: 'Negotiation',      color: '#f97316', prob: 80  },
-  { key: 'Closed Won',          label: 'Closed Won',       color: '#34d399', prob: 100 },
-  { key: 'Closed Lost',         label: 'Closed Lost',      color: '#f43f5e', prob: 0   },
+// ── Consolidated kanban columns: 10 DB stages → 6 visual columns ─
+const KANBAN_COLUMNS = [
+  { key: 'Qualifying',  label: 'Qualifying',  color: '#38bdf8', prob: 20,
+    dbStage: 'Qualification',        dbStages: ['Prospecting','Qualification'] },
+  { key: 'Discovery',   label: 'Discovery',   color: '#a78bfa', prob: 35,
+    dbStage: 'Needs Analysis',       dbStages: ['Needs Analysis','Value Proposition','Id. Decision Makers','Perception Analysis'] },
+  { key: 'Proposal',    label: 'Proposal',    color: '#fbbf24', prob: 65,
+    dbStage: 'Proposal/Price Quote', dbStages: ['Proposal/Price Quote'] },
+  { key: 'Negotiation', label: 'Negotiation', color: '#f97316', prob: 80,
+    dbStage: 'Negotiation/Review',   dbStages: ['Negotiation/Review'] },
+  { key: 'Closed Won',  label: 'Closed Won',  color: '#34d399', prob: 100,
+    dbStage: 'Closed Won',           dbStages: ['Closed Won'] },
+  { key: 'Closed Lost', label: 'Closed Lost', color: '#f43f5e', prob: 0,
+    dbStage: 'Closed Lost',          dbStages: ['Closed Lost'] },
 ];
 
-const ALL_STAGES = KANBAN_STAGES.map(s => s.key);
+// Per-DB-stage probabilities (used on individual lead cards)
+const DB_STAGE_PROB: Record<string, number> = {
+  'Prospecting': 10, 'Qualification': 20, 'Needs Analysis': 25,
+  'Value Proposition': 35, 'Id. Decision Makers': 40, 'Perception Analysis': 50,
+  'Proposal/Price Quote': 65, 'Negotiation/Review': 80, 'Closed Won': 100, 'Closed Lost': 0,
+};
 
-const STAGE_PROB: Record<string, number> = Object.fromEntries(KANBAN_STAGES.map(s => [s.key, s.prob]));
+// Kanban column prob (for column weighted totals)
+const STAGE_PROB: Record<string, number> = Object.fromEntries(KANBAN_COLUMNS.map(c => [c.key, c.prob]));
 
-// account_type descriptions
+// All DB stage names (for modal stage picker)
+const ALL_STAGES_DB = [
+  'Prospecting','Qualification','Needs Analysis','Value Proposition',
+  'Id. Decision Makers','Perception Analysis','Proposal/Price Quote',
+  'Negotiation/Review','Closed Won','Closed Lost',
+];
+
+// Map DB stage → kanban column key
+function mapStageToColumn(dbStage: string): string {
+  for (const col of KANBAN_COLUMNS) {
+    if (col.dbStages.includes(dbStage)) return col.key;
+  }
+  return 'Qualifying';
+}
+
+// Account type descriptions (seats-based)
 const ACCOUNT_TYPE_DESC: Record<string, string> = {
   'Enterprise': 'Companies requiring 150+ seats — large corporates, MNCs, global captives',
   'Growth':     'Scaling companies requiring 70–150 seats — funded startups, regional offices, mid-size firms',
   'SME':        'Small & medium businesses requiring <70 seats — boutique firms, early-stage startups',
 };
-
-// No mapping needed — DB stage names match kanban keys directly
-function mapStage(dbStage: string): string {
-  return dbStage;
-}
-
-function mapStageBack(kanbanKey: string): string {
-  return kanbanKey;
-}
 
 interface Lead {
   id: number;
@@ -180,7 +194,7 @@ function LeadCard({
   const overdue = days < 0;
   const urgent  = days >= 0 && days <= 7;
   const aColor  = AVATAR_COLORS[lead.assigned_to] || '#8896aa';
-  const prob    = STAGE_PROB[lead.stage] ?? lead.probability ?? 10;
+  const prob    = DB_STAGE_PROB[lead.stage] ?? lead.probability ?? 10;
   const expectedWeighted = (lead.expected_revenue * prob) / 100;
   const stale   = daysSince(lead.last_activity) >= 15;
   const [showAssignMenu, setShowAssignMenu] = useState(false);
@@ -372,6 +386,7 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
   const [stage, setStage]   = useState(lead.stage);
   const [score, setScore]   = useState(lead.score);
   const [notes, setNotes]   = useState(lead.notes || '');
+  const [status, setStatus] = useState(lead.status || 'active');
   const [taskInput, setTaskInput]  = useState('');
   const [eventInput, setEventInput] = useState('');
   const [tasks, setTasks]   = useState<string[]>([]);
@@ -386,7 +401,7 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
     await fetch(`/api/leads/${lead.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage, score, notes }),
+      body: JSON.stringify({ stage, score, notes, status }),
     });
     onUpdate(lead.id, stage, score);
     setSaving(false);
@@ -473,13 +488,31 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
           />
         </div>
 
+        {/* Status */}
+        <div className="mb-3">
+          <label className="text-xs text-[#8896aa] block mb-1.5">Status</label>
+          <div className="flex gap-1.5 flex-wrap">
+            {([['active','Active','#34d399'],['on_hold','On Hold','#fbbf24'],['nurture','Nurture','#a78bfa'],['won','Won','#34d399'],['lost','Lost','#f87171']] as const).map(([val, lbl, col]) => (
+              <button key={val} onClick={() => setStatus(val)}
+                className="px-3 py-1 rounded text-xs transition-all"
+                style={{
+                  background: status === val ? `${col}20` : '#161b23',
+                  color:      status === val ? col : '#8896aa',
+                  border:     `1px solid ${status === val ? col + '50' : '#1e2530'}`,
+                  fontWeight: status === val ? 600 : 400,
+                }}
+              >{lbl}</button>
+            ))}
+          </div>
+        </div>
+
         {/* Stage */}
         <div className="mb-3">
-          <label className="text-xs text-[#8896aa] block mb-1.5">Stage <span className="text-[#4a5568] font-mono">(probability: {STAGE_PROB[stage] ?? '?'}%)</span></label>
+          <label className="text-xs text-[#8896aa] block mb-1.5">Stage <span className="text-[#4a5568] font-mono">(probability: {DB_STAGE_PROB[stage] ?? '?'}%)</span></label>
           <select value={stage} onChange={e => setStage(e.target.value)}
             className="w-full text-sm rounded-md px-3 py-2 bg-[#161b23] border border-[#1e2530] text-[#dde3ed] outline-none focus:border-[#f97316]"
           >
-            {ALL_STAGES.map(s => <option key={s} value={s}>{s} — {STAGE_PROB[s] ?? 0}%</option>)}
+            {ALL_STAGES_DB.map(s => <option key={s} value={s}>{s} — {DB_STAGE_PROB[s] ?? 0}%</option>)}
           </select>
         </div>
 
@@ -551,7 +584,7 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
 function KanbanColumn({
   stage, leads, onCardClick, onUpdate, onAssign, dragOverCol, setDragOverCol, setDraggingId, draggingId, onDrop,
 }: {
-  stage: typeof KANBAN_STAGES[0];
+  stage: typeof KANBAN_COLUMNS[0];
   leads: Lead[];
   onCardClick: (lead: Lead) => void;
   onUpdate: (id: number, field: string, value: string | number) => void;
@@ -634,17 +667,119 @@ function KanbanColumn({
   );
 }
 
+// ── Existing Accounts View ────────────────────────────────────
+function ExistingAccountsView({ leads }: { leads: Lead[] }) {
+  if (leads.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-56 text-center">
+        <div className="text-4xl mb-3">🏢</div>
+        <div className="text-[#8896aa] text-sm font-medium mb-1">No closed accounts yet</div>
+        <div className="text-[#4a5568] text-xs">Drag leads to Closed Won to see them here for cross-sell & upsell tracking</div>
+      </div>
+    );
+  }
+
+  // Group by company
+  const grouped = leads.reduce((acc, l) => {
+    if (!acc[l.company]) acc[l.company] = [];
+    acc[l.company].push(l);
+    return acc;
+  }, {} as Record<string, Lead[]>);
+
+  const companies = Object.entries(grouped).sort((a, b) =>
+    b[1].reduce((s, l) => s + l.expected_revenue, 0) - a[1].reduce((s, l) => s + l.expected_revenue, 0)
+  );
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="text-xs text-[#8896aa]">{companies.length} accounts · Cross-sell & upsell pipeline</div>
+        <div className="flex items-center gap-3 ml-auto text-[9px] text-[#4a5568]">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block bg-[#f97316]"/>Upsell signal</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block bg-[#38bdf8]"/>Multi-city</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        {companies.map(([company, acctLeads]) => {
+          const totalRev   = acctLeads.reduce((s, l) => s + (l.expected_revenue || 0), 0);
+          const totalSeats = acctLeads.reduce((s, l) => s + (l.seats_required || 0), 0);
+          const latest     = [...acctLeads].sort((a, b) => new Date(b.close_date || 0).getTime() - new Date(a.close_date || 0).getTime())[0];
+          const cities     = [...new Set(acctLeads.map(l => l.city))];
+          const upsell     = totalSeats < 70 ? 'Upgrade to Growth tier' : totalSeats < 150 ? 'Upgrade to Enterprise tier' : cities.length < 3 ? 'Multi-city expansion' : 'Premium services upsell';
+          const upsellCol  = totalSeats < 150 ? '#f97316' : '#38bdf8';
+          const aColor     = AVATAR_COLORS[latest.assigned_to] || '#8896aa';
+          return (
+            <div key={company} className="card" style={{ borderRadius: '10px' }}>
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-[#dde3ed] truncate">{company}</div>
+                  <div className="text-[11px] text-[#8896aa] mt-0.5">{latest.contact_name} · {cities.join(', ')}</div>
+                </div>
+                <span className="badge text-[10px] shrink-0 ml-2" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>Closed Won</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {[
+                  { label: 'ACV', value: fmtRevenue(totalRev), color: '#34d399' },
+                  { label: 'Seats', value: totalSeats.toString(), color: '#dde3ed' },
+                  { label: 'Deals', value: acctLeads.length.toString(), color: '#dde3ed' },
+                ].map(m => (
+                  <div key={m.label} className="rounded-lg p-2" style={{ background: '#161b23' }}>
+                    <div className="text-[9px] text-[#4a5568] mb-0.5">{m.label}</div>
+                    <div className="font-mono text-xs font-semibold" style={{ color: m.color }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-2 rounded-lg mb-3" style={{ background: `${upsellCol}0c`, border: `1px solid ${upsellCol}30` }}>
+                <div className="text-[10px] font-medium mb-0.5" style={{ color: upsellCol }}>💡 {upsell}</div>
+                <div className="text-[9px] text-[#4a5568]">
+                  {totalSeats < 70 ? `${70 - totalSeats} seats to Growth threshold` :
+                   totalSeats < 150 ? `${150 - totalSeats} seats to Enterprise threshold` :
+                   `Operating in ${cities.length} cit${cities.length !== 1 ? 'ies' : 'y'}`}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold" style={{ background: aColor, color: '#080d14' }}>
+                    {latest.assigned_to ? latest.assigned_to.split(' ').map((w: string) => w[0]).join('') : '?'}
+                  </div>
+                  <span className="text-[10px] text-[#4a5568]">{latest.assigned_to?.split(' ')[0]}</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <button className="px-2 py-1 text-[10px] rounded border border-[#1e2530] text-[#8896aa] hover:text-[#f97316] hover:border-[rgba(249,115,22,0.3)] transition-colors">
+                    + Add Seats
+                  </button>
+                  <button className="px-2 py-1 text-[10px] rounded border border-[#1e2530] text-[#8896aa] hover:text-[#38bdf8] hover:border-[rgba(56,189,248,0.3)] transition-colors">
+                    Renewal
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────
 export default function PipelinePage() {
   const [leads, setLeads]               = useState<Lead[]>([]);
   const [loading, setLoading]           = useState(true);
   const [selected, setSelected]         = useState<Lead | null>(null);
   const [cityFilter, setCityFilter]     = useState('All');
-  const [activeTypeTab, setActiveTypeTab] = useState('All');
+  const [typeFilter, setTypeFilter]     = useState('All');
+  const [repFilter, setRepFilter]       = useState('All');
+  const [sourceFilter, setSourceFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [smeMax, setSmeMax]             = useState(70);
+  const [growthMax, setGrowthMax]       = useState(150);
+  const [viewMode, setViewMode]         = useState<'kanban' | 'accounts'>('kanban');
   const [draggingId, setDraggingId]     = useState<number | null>(null);
   const [dragOverCol, setDragOverCol]   = useState<string | null>(null);
   const [showSubscribe, setShowSubscribe] = useState(false);
-  const [showTypeInfo, setShowTypeInfo]  = useState<string | null>(null);
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
@@ -658,12 +793,11 @@ export default function PipelinePage() {
   useEffect(() => { loadLeads(); }, [loadLeads]);
 
   // Drop handler — PATCH stage + status via API
-  async function handleDrop(leadId: number, toStageKey: string) {
-    const dbStage = mapStageBack(toStageKey);
-    const prob    = STAGE_PROB[dbStage] ?? 10;
-    const status  = dbStage === 'Closed Won' ? 'won'
-                  : dbStage === 'Closed Lost' ? 'lost'
-                  : 'active';
+  async function handleDrop(leadId: number, toColKey: string) {
+    const col     = KANBAN_COLUMNS.find(c => c.key === toColKey)!;
+    const dbStage = col.dbStage;
+    const prob    = col.prob;
+    const status  = toColKey === 'Closed Won' ? 'won' : toColKey === 'Closed Lost' ? 'lost' : 'active';
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stage: dbStage, probability: prob, status } : l));
     await fetch(`/api/leads/${leadId}`, {
       method: 'PATCH',
@@ -700,13 +834,24 @@ export default function PipelinePage() {
     if (selected?.id === id) setSelected(s => s ? { ...s, stage, score } : s);
   }
 
-  // Filters
-  const cityFiltered = leads.filter(l => cityFilter === 'All' || l.city === cityFilter);
-  const tabFiltered  = activeTypeTab === 'All' ? cityFiltered : cityFiltered.filter(l => l.account_type === activeTypeTab);
+  // Seats-based account type (overrides stored account_type)
+  function acctType(seats: number): string {
+    if (!seats || seats < smeMax) return 'SME';
+    if (seats < growthMax) return 'Growth';
+    return 'Enterprise';
+  }
 
-  const kanbanColumns = KANBAN_STAGES.map(s => ({
-    ...s,
-    leads: tabFiltered.filter(l => mapStage(l.stage) === s.key),
+  // All filters applied
+  const tabFiltered = leads
+    .filter(l => cityFilter === 'All' || l.city === cityFilter)
+    .filter(l => typeFilter === 'All' || acctType(l.seats_required) === typeFilter)
+    .filter(l => repFilter === 'All' || l.assigned_to === repFilter)
+    .filter(l => sourceFilter === 'All' || l.source === sourceFilter)
+    .filter(l => statusFilter === 'all' || l.status === statusFilter);
+
+  const kanbanColumns = KANBAN_COLUMNS.map(col => ({
+    ...col,
+    leads: tabFiltered.filter(l => mapStageToColumn(l.stage) === col.key),
   }));
 
   const totalPipelineValue   = tabFiltered.reduce((s, l) => s + (l.expected_revenue || 0), 0);
@@ -746,59 +891,84 @@ export default function PipelinePage() {
 
       <InsightCallout insight={insight} />
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <div className="flex items-center gap-1 text-xs text-[#8896aa]"><Filter size={12} /><span>City:</span></div>
-        {cities.map(c => (
-          <button key={c} onClick={() => setCityFilter(c)}
-            className="px-2.5 py-1 rounded text-xs transition-colors"
-            style={{
-              background: cityFilter === c ? 'rgba(249,115,22,0.15)' : '#161b23',
-              color: cityFilter === c ? '#f97316' : '#8896aa',
-              border: `1px solid ${cityFilter === c ? 'rgba(249,115,22,0.4)' : '#1e2530'}`,
-            }}
-          >{c}</button>
-        ))}
+      {/* View toggle */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex rounded-lg overflow-hidden border border-[#1e2530]" style={{ background: '#0f1318' }}>
+          {(['kanban', 'accounts'] as const).map(mode => (
+            <button key={mode} onClick={() => setViewMode(mode)}
+              className="px-4 py-1.5 text-xs font-medium transition-colors"
+              style={{
+                background: viewMode === mode ? 'rgba(249,115,22,0.15)' : 'transparent',
+                color: viewMode === mode ? '#f97316' : '#8896aa',
+              }}
+            >{mode === 'accounts' ? '🏢 Existing Accounts' : '📋 Kanban'}</button>
+          ))}
+        </div>
+        <div className="text-[10px] text-[#4a5568]">{tabFiltered.length} records</div>
       </div>
 
-      {/* Account type tabs with info tooltips */}
-      <div className="flex gap-0 mb-4 border-b border-[#1e2530]">
-        {['All', 'Enterprise', 'Growth', 'SME'].map(t => {
-          const cnt = t === 'All' ? cityFiltered.length : cityFiltered.filter(l => l.account_type === t).length;
-          const isActive = activeTypeTab === t;
-          return (
-            <div key={t} className="relative flex items-center">
-              <button
-                onClick={() => setActiveTypeTab(t)}
-                className="px-4 py-2 text-sm font-medium transition-colors"
-                style={{
-                  color: isActive ? '#f97316' : '#8896aa',
-                  borderBottom: isActive ? '2px solid #f97316' : '2px solid transparent',
-                }}
-              >{t} ({cnt})</button>
-              {t !== 'All' && (
-                <button
-                  onMouseEnter={() => setShowTypeInfo(t)}
-                  onMouseLeave={() => setShowTypeInfo(null)}
-                  className="mr-1 text-[#4a5568] hover:text-[#8896aa]"
-                ><Info size={11} /></button>
-              )}
-              {showTypeInfo === t && (
-                <div className="absolute top-full left-0 z-20 w-56 p-2.5 rounded-lg text-xs text-[#dde3ed] shadow-xl"
-                  style={{ background: '#161b23', border: '1px solid #2d3848', marginTop: '4px' }}>
-                  <div className="font-semibold text-[#f97316] mb-1">{t}</div>
-                  {ACCOUNT_TYPE_DESC[t]}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {/* Filter panel */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap px-3 py-2 rounded-lg" style={{ background: '#0f1318', border: '1px solid #1e2530' }}>
+        <Filter size={12} className="text-[#4a5568] shrink-0" />
+        <span className="text-[10px] text-[#4a5568] uppercase tracking-widest mr-1">Filter</span>
+
+        <select value={cityFilter} onChange={e => setCityFilter(e.target.value)} className="filter-sel">
+          <option value="All">All Cities</option>
+          {cities.slice(1).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="filter-sel">
+          <option value="All">All Types</option>
+          <option value="Enterprise">Enterprise (150+ seats)</option>
+          <option value="Growth">Growth (70–150)</option>
+          <option value="SME">SME (&lt;70 seats)</option>
+        </select>
+
+        <select value={repFilter} onChange={e => setRepFilter(e.target.value)} className="filter-sel">
+          <option value="All">All Agents</option>
+          {ALL_REPS.map(r => <option key={r} value={r}>{r.split(' ')[0]} {r.split(' ')[1]}</option>)}
+        </select>
+
+        <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} className="filter-sel">
+          <option value="All">All Sources</option>
+          {[...new Set(leads.map(l => l.source).filter(Boolean))].sort().map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="filter-sel">
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="on_hold">On Hold</option>
+          <option value="nurture">Nurture</option>
+          <option value="won">Won</option>
+          <option value="lost">Lost</option>
+        </select>
+
+        {typeFilter !== 'All' && (
+          <div className="flex items-center gap-1.5 text-[10px] text-[#4a5568] border-l border-[#1e2530] pl-2.5 ml-1">
+            <span>Thresholds — SME &lt;</span>
+            <input type="number" value={smeMax} onChange={e => setSmeMax(Number(e.target.value))}
+              className="w-10 text-center text-[10px] bg-[#161b23] border border-[#1e2530] rounded px-1 py-0.5 text-[#dde3ed] outline-none focus:border-[#f97316]" />
+            <span className="text-[#4a5568]">· Growth &lt;</span>
+            <input type="number" value={growthMax} onChange={e => setGrowthMax(Number(e.target.value))}
+              className="w-10 text-center text-[10px] bg-[#161b23] border border-[#1e2530] rounded px-1 py-0.5 text-[#dde3ed] outline-none focus:border-[#f97316]" />
+          </div>
+        )}
+
+        {(cityFilter !== 'All' || typeFilter !== 'All' || repFilter !== 'All' || sourceFilter !== 'All' || statusFilter !== 'all') && (
+          <button
+            onClick={() => { setCityFilter('All'); setTypeFilter('All'); setRepFilter('All'); setSourceFilter('All'); setStatusFilter('all'); }}
+            className="ml-auto text-[10px] px-2 py-0.5 rounded transition-colors"
+            style={{ color: '#f87171', border: '1px solid rgba(248,113,113,0.25)' }}
+          >Clear all ×</button>
+        )}
       </div>
 
-      {/* Kanban board */}
-      {loading ? (
+      {/* Kanban board or Existing Accounts */}
+      {viewMode === 'accounts' ? (
+        <ExistingAccountsView leads={leads.filter(l => l.status === 'won')} />
+      ) : loading ? (
         <div className="flex gap-4">
-          {KANBAN_STAGES.map(s => (
+          {KANBAN_COLUMNS.map(s => (
             <div key={s.key} className="flex-shrink-0" style={{ width: '220px' }}>
               <div className="h-10 rounded mb-2 animate-pulse" style={{ background: '#161b23' }} />
               {[1,2,3].map(i => <div key={i} className="h-28 rounded mb-2 animate-pulse" style={{ background: '#0f1318' }} />)}
@@ -825,7 +995,7 @@ export default function PipelinePage() {
         </div>
       )}
 
-      {/* Pipeline summary bar */}
+      {/* Pipeline summary bar (kanban only) */}
       <div className="mt-4 card p-0 overflow-hidden">
         {/* Hero weighted number */}
         <div className="flex items-stretch">

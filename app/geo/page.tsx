@@ -22,14 +22,6 @@ interface GeoZone {
 }
 
 const REC_COLORS: Record<string, string> = { Expand: '#34d399', Watch: '#fbbf24', Monitor: '#38bdf8', Skip: '#f87171' };
-const CITY_COORDS: Record<string, { cx: number; cy: number }> = {
-  Bangalore: { cx: 245, cy: 320 },
-  Hyderabad: { cx: 230, cy: 270 },
-  Chennai: { cx: 260, cy: 350 },
-  Mumbai: { cx: 145, cy: 210 },
-  Pune: { cx: 160, cy: 250 },
-  Gurugram: { cx: 210, cy: 100 },
-};
 
 const SCORE_DIMENSION_META = [
   {
@@ -164,17 +156,24 @@ function AnalysisModal({ zone, onClose }: { zone: GeoZone; onClose: () => void }
   );
 }
 
-// ─── India SVG Map ─────────────────────────────────────────
-function IndiaMap({ zones, onCityClick, activeCity }: { zones: GeoZone[]; onCityClick: (city: string) => void; activeCity: string | null }) {
-  // City-level aggregated scores
+// ─── City Bubble Chart (replaces poor SVG map) ─────────────
+function CityBubbleChart({ zones, onCityClick, activeCity }: { zones: GeoZone[]; onCityClick: (city: string) => void; activeCity: string | null }) {
   const cityScores: Record<string, number> = {};
+  const cityRecs:   Record<string, string>  = {};
+  const cityZones:  Record<string, number>  = {};
   zones.forEach(z => {
+    cityZones[z.city] = (cityZones[z.city] || 0) + 1;
     if (!cityScores[z.city] || z.expansion_score > cityScores[z.city]) {
       cityScores[z.city] = z.expansion_score;
+      cityRecs[z.city]   = z.recommendation;
     }
   });
 
-  function circleColor(score: number) {
+  const cityData = Object.entries(cityScores)
+    .map(([city, score]) => ({ city, score, rec: cityRecs[city], zones: cityZones[city] }))
+    .sort((a, b) => b.score - a.score);
+
+  function scoreColor(score: number) {
     if (score >= 80) return '#34d399';
     if (score >= 60) return '#f97316';
     if (score >= 50) return '#38bdf8';
@@ -183,38 +182,47 @@ function IndiaMap({ zones, onCityClick, activeCity }: { zones: GeoZone[]; onCity
 
   return (
     <div className="card">
-      <div className="text-sm font-medium text-[#dde3ed] mb-2 flex items-center gap-1">
-        India Expansion Map
-        <DataSourceTooltip metric="Expansion Map" source="Luminocity3d.org VIIRS + Google Trends + MCA21 + Google Maps" method="5-signal composite: Nightlight (Luminocity3d VIIRS DNB) 25% · Search Growth (Google Ads API) 25% · Enterprise Density (MCA21) 25% · Competitor Gap (Google Maps) 15% · Price Viability (JLL) 10%" confidence="Estimated" refreshRate="Quarterly" />
+      <div className="text-sm font-medium text-[#dde3ed] mb-1 flex items-center gap-1">
+        City Expansion Overview
+        <DataSourceTooltip metric="Expansion Map" source="Luminocity3d.org VIIRS + Google Trends + MCA21 + Google Maps" method="5-signal composite: Nightlight 25% · Search Growth 25% · Enterprise Density 25% · Competitor Gap 15% · Price Viability 10%" confidence="Estimated" refreshRate="Quarterly" />
       </div>
-      <div className="text-[10px] text-[#4a5568] mb-3">Click a city to filter zones · Size = expansion score</div>
+      <div className="text-[10px] text-[#4a5568] mb-3">Click a city to filter zones below · Score = top zone score</div>
 
-      <svg viewBox="0 0 400 500" className="w-full" style={{ maxHeight: '320px' }}>
-        {/* Simplified India outline */}
-        <path d="M200,20 L310,60 L360,120 L370,200 L340,280 L310,360 L270,420 L240,460 L210,470 L190,460 L160,420 L130,360 L100,280 L80,200 L90,120 L140,60 Z"
-          fill="none" stroke="#1e2530" strokeWidth="1.5" />
-        {/* Kashmir */}
-        <path d="M200,20 L230,15 L260,25 L280,50 L260,60 L240,55 L220,45 Z" fill="none" stroke="#1e2530" strokeWidth="1" />
-
-        {/* City circles */}
-        {Object.entries(CITY_COORDS).map(([city, pos]) => {
-          const score = cityScores[city] || 0;
-          if (!score) return null;
-          const r = 8 + (score / 100) * 14;
-          const color = circleColor(score);
+      <div className="grid grid-cols-2 gap-2">
+        {cityData.map(({ city, score, rec, zones: zCount }) => {
+          const color    = scoreColor(score);
           const isActive = activeCity === city;
+          const size     = 42 + Math.round((score / 100) * 18);
           return (
-            <g key={city} onClick={() => onCityClick(city)} style={{ cursor: 'pointer' }}>
-              <circle cx={pos.cx} cy={pos.cy} r={r} fill={color} opacity={isActive ? 0.9 : 0.4} stroke={color} strokeWidth={isActive ? 2 : 1} />
-              <text x={pos.cx} y={pos.cy - r - 4} textAnchor="middle" fontSize="8" fill="#dde3ed">{city}</text>
-              <text x={pos.cx} y={pos.cy + 3} textAnchor="middle" fontSize="8" fill="white" fontWeight="bold">{score}</text>
-            </g>
+            <div
+              key={city}
+              onClick={() => onCityClick(city)}
+              className="cursor-pointer flex items-center gap-3 p-2.5 rounded-lg transition-all hover:border-[#2d3848]"
+              style={{
+                background: isActive ? `${color}0d` : '#161b23',
+                border: `1px solid ${isActive ? color + '50' : '#1e2530'}`,
+              }}
+            >
+              <div
+                className="flex items-center justify-center rounded-full shrink-0 font-mono font-bold transition-all"
+                style={{ width: size, height: size, background: `${color}18`, border: `2px solid ${color}`, color, fontSize: size > 54 ? '14px' : '12px' }}
+              >
+                {score}
+              </div>
+              <div className="min-w-0">
+                <div className="font-semibold text-sm text-[#dde3ed] truncate">{city}</div>
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: `${color}20`, color }}>{rec}</span>
+                  <span className="text-[9px] text-[#4a5568]">{zCount} zone{zCount !== 1 ? 's' : ''}</span>
+                </div>
+              </div>
+            </div>
           );
         })}
-      </svg>
+      </div>
 
       {/* Legend */}
-      <div className="flex gap-3 mt-2 flex-wrap">
+      <div className="flex gap-3 mt-3 flex-wrap">
         {[{ label: '≥80 Expand', color: '#34d399' }, { label: '60–79 Watch', color: '#f97316' }, { label: '50–69 Monitor', color: '#38bdf8' }, { label: '<50 Skip', color: '#8896aa' }].map(l => (
           <div key={l.label} className="flex items-center gap-1 text-[10px] text-[#8896aa]">
             <div className="w-2 h-2 rounded-full" style={{ background: l.color }} />
@@ -223,10 +231,9 @@ function IndiaMap({ zones, onCityClick, activeCity }: { zones: GeoZone[]; onCity
         ))}
       </div>
 
-      {/* Methodology card */}
-      <div className="mt-3 p-3 rounded-lg text-[10px] text-[#4a5568]" style={{ background: '#161b23' }}>
-        <div className="font-semibold text-[#8896aa] mb-1">Data Methodology</div>
-        Scores combine 5 signals: Nightlight Index (NASA VIIRS satellite) · Search Growth (Google Trends) · Enterprise Density (Census + MCA21) · Competitor Gap (Maps audit) · Price Viability (broker intel)
+      <div className="mt-3 p-2.5 rounded-lg text-[10px] text-[#4a5568]" style={{ background: '#161b23' }}>
+        <span className="font-semibold text-[#8896aa]">Signals: </span>
+        Nightlight (VIIRS) · Search Growth (Google Trends) · Enterprise Density (MCA21) · Competitor Gap (Maps) · Price Viability
       </div>
     </div>
   );
@@ -285,7 +292,7 @@ export default function GeoPage() {
       <div className="grid grid-cols-5 gap-5">
         {/* Map (40%) */}
         <div className="col-span-2">
-          <IndiaMap zones={zones} onCityClick={c => setActiveCity(activeCity === c ? null : c)} activeCity={activeCity} />
+          <CityBubbleChart zones={zones} onCityClick={c => setActiveCity(activeCity === c ? null : c)} activeCity={activeCity} />
         </div>
 
         {/* Zone list (60%) */}

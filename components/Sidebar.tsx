@@ -12,8 +12,8 @@ const SECTIONS = [
   {
     label: 'SALES',
     items: [
-      { label: 'Pipeline',         href: '/pipeline',   icon: GitMerge },
       { label: 'Dashboard',        href: '/dashboard',  icon: LayoutDashboard },
+      { label: 'Pipeline',         href: '/pipeline',   icon: GitMerge },
       { label: 'Team Performance', href: '/team',       icon: UserCheck },
     ],
   },
@@ -51,7 +51,7 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   function isActive(href: string) {
-    if (href === '/pipeline') return pathname === '/pipeline' || pathname === '/';
+    if (href === '/pipeline') return pathname === '/pipeline';
     if (href === '/space/bangalore') return pathname.startsWith('/space/');
     // Exact match for /geo to avoid it matching /geo/markets
     if (href === '/geo') return pathname === '/geo';

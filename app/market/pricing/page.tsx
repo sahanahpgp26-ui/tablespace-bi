@@ -107,11 +107,11 @@ export default function PricingPage() {
           tooltip={{ metric: 'Premium vs Median', source: 'pricing_history table (internal + competitor)', method: '(OurAvgPrice - MarketMedian) / MarketMedian × 100', confidence: 'Medium', refreshRate: 'Quarterly' }}
         />
         <KpiCard
-          label="Cheapest Competitor"
-          value={`₹${cheapest?.price_per_seat.toLocaleString() || '—'}`}
-          sub={cheapest?.company || ''}
-          color="#f87171"
-          tooltip={{ metric: 'Cheapest Competitor', source: 'pricing_history table', method: 'MIN(price_per_seat) WHERE company != TableSpace, latest quarter', confidence: 'Medium', refreshRate: 'Quarterly' }}
+          label="Market Price Spread"
+          value={`₹${((mostExp?.price_per_seat || 0) - (cheapest?.price_per_seat || 0)).toLocaleString()}`}
+          sub={`${cheapest?.company || '—'} → ${mostExp?.company || '—'}`}
+          color="#38bdf8"
+          tooltip={{ metric: 'Market Price Spread', source: 'pricing_history table', method: 'MAX(price) − MIN(price) WHERE company ≠ TableSpace, latest quarter — shows pricing range we operate within', confidence: 'Medium', refreshRate: 'Quarterly' }}
         />
         <KpiCard
           label="Most Expensive Competitor"

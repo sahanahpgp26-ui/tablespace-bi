@@ -58,6 +58,21 @@ export function GET() {
     GROUP BY e.name
   `).all() as Record<string, unknown>[];
 
+  // Won + Lost in last 30 days per employee
+  const recentClosed = db.prepare(`
+    SELECT
+      assigned_to,
+      SUM(CASE WHEN status='won'  THEN 1 ELSE 0 END) as won_30d_count,
+      SUM(CASE WHEN status='won'  THEN expected_revenue ELSE 0 END) as won_30d_revenue,
+      SUM(CASE WHEN status='lost' THEN 1 ELSE 0 END) as lost_30d_count,
+      SUM(CASE WHEN status='lost' THEN expected_revenue ELSE 0 END) as lost_30d_revenue
+    FROM leads
+    WHERE assigned_to IS NOT NULL
+      AND status IN ('won','lost')
+      AND updated_at >= datetime('now', '-30 days')
+    GROUP BY assigned_to
+  `).all() as { assigned_to: string; won_30d_count: number; won_30d_revenue: number; lost_30d_count: number; lost_30d_revenue: number }[];
+
   // Recent leads per employee (last 5)
   const recentLeads = db.prepare(`
     SELECT id, company, city, stage, score, expected_revenue, assigned_to, close_date, status, account_type
@@ -68,13 +83,17 @@ export function GET() {
   `).all() as Record<string, unknown>[];
 
   // Leaderboard: rank by won_revenue desc
-  interface WonRow   { assigned_to: string; won_count: number; won_revenue: number }
-  interface PipeRow  { assigned_to: string; total_leads: number; pipeline_value: number; avg_score: number; hot_pipeline: number; in_negotiation: number; in_proposal: number; closing_this_month: number }
-  interface ActRow   { employee_name: string; total_activities: number; completed_activities: number; calls: number; meetings: number; demos: number }
-  interface StageRow { assigned_to: string; stage: string; count: number; revenue: number }
+  interface WonRow     { assigned_to: string; won_count: number; won_revenue: number }
+  interface PipeRow    { assigned_to: string; total_leads: number; pipeline_value: number; avg_score: number; hot_pipeline: number; in_negotiation: number; in_proposal: number; closing_this_month: number }
+  interface ActRow     { employee_name: string; total_activities: number; completed_activities: number; calls: number; meetings: number; demos: number }
+  interface StageRow   { assigned_to: string; stage: string; count: number; revenue: number }
+  interface ClosedRow  { assigned_to: string; won_30d_count: number; won_30d_revenue: number; lost_30d_count: number; lost_30d_revenue: number }
 
   const wonMap: Record<string, WonRow>  = {};
   (wonStats as unknown as WonRow[]).forEach(w => { wonMap[w.assigned_to] = w; });
+
+  const closedMap: Record<string, ClosedRow> = {};
+  (recentClosed as unknown as ClosedRow[]).forEach(r => { closedMap[r.assigned_to] = r; });
 
   const pipeMap: Record<string, PipeRow> = {};
   (pipelineStats as unknown as PipeRow[]).forEach(p => { pipeMap[p.assigned_to] = p; });
@@ -112,6 +131,10 @@ export function GET() {
       won_count:          (won.won_count           as number) || 0,
       won_revenue:        wonRev,
       attainment_pct:     attainment,
+      won_30d_count:      closedMap[emp.name]?.won_30d_count  || 0,
+      won_30d_revenue:    closedMap[emp.name]?.won_30d_revenue || 0,
+      lost_30d_count:     closedMap[emp.name]?.lost_30d_count  || 0,
+      lost_30d_revenue:   closedMap[emp.name]?.lost_30d_revenue || 0,
       total_activities:   (act.total_activities   as number) || 0,
       completed_activities:(act.completed_activities as number) || 0,
       calls:              (act.calls              as number) || 0,

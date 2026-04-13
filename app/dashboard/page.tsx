@@ -84,15 +84,16 @@ function SubscribeModal({ onClose }: { onClose: () => void }) {
 
 // ─────────────────────────────────────────────────────────────
 interface DashboardData {
-  stage_stats:     { stage: string; count: number; total_revenue: number; avg_score: number }[];
-  won_stats:       { count: number; revenue: number };
-  total_pipeline:  number;
-  by_source:       { source: string; count: number; revenue: number }[];
-  by_city:         { city: string; count: number; revenue: number; avg_score: number }[];
-  quarterly:       { quarter: string; revenue: number; deals: number }[];
-  funnel:          { stage: string; count: number; revenue: number }[];
-  by_account_type: { account_type: string; count: number; revenue: number }[];
-  recent_leads:    { id: number; company: string; contact_name: string; city: string; stage: string; score: number; source: string; expected_revenue: number; created_at: string }[];
+  stage_stats:      { stage: string; count: number; total_revenue: number; avg_score: number }[];
+  won_stats:        { count: number; revenue: number };
+  total_pipeline:   number;
+  weighted_pipeline?: number;
+  by_source:        { source: string; count: number; revenue: number }[];
+  by_city:          { city: string; count: number; revenue: number; avg_score: number }[];
+  quarterly:        { quarter: string; revenue: number; deals: number }[];
+  funnel:           { stage: string; count: number; revenue: number }[];
+  by_account_type:  { account_type: string; count: number; revenue: number }[];
+  recent_leads:     { id: number; company: string; contact_name: string; city: string; stage: string; score: number; source: string; expected_revenue: number; created_at: string }[];
 }
 
 function fmtRevenue(n: number) {
@@ -296,6 +297,7 @@ export default function DashboardPage() {
   const wonRevenue          = data.won_stats?.revenue || 0;
   const wonCount            = data.won_stats?.count || 0;
   const totalPotential      = data.total_pipeline || 0;
+  const weightedPipeline    = data.weighted_pipeline || 0;
   const activePipelineCount = data.stage_stats.reduce((s, r) => s + r.count, 0);
   const avgScore = data.stage_stats.reduce((s, r) => s + r.avg_score * r.count, 0) /
     Math.max(1, activePipelineCount);
@@ -348,11 +350,13 @@ export default function DashboardPage() {
       <InsightCallout insight={insight} />
 
       {/* KPI Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <KpiCard label="Total Sales" value={fmtRevenue(wonRevenue)} sub={`${wonCount} deals closed`} color="#34d399"
           tooltip={{ metric: 'Total Sales', source: 'leads table (status=won)', method: 'SUM(expected_revenue) WHERE status=won', confidence: 'High', refreshRate: 'Real-time' }} />
         <KpiCard label="Total Potential Sales" value={fmtRevenue(totalPotential)} sub={`${activePipelineCount} active opportunities`} color="#38bdf8"
           tooltip={{ metric: 'Total Potential Sales', source: 'leads table (status=active)', method: 'SUM(expected_revenue) WHERE status=active', confidence: 'Estimated', refreshRate: 'Real-time' }} />
+        <KpiCard label="Weighted Pipeline" value={fmtRevenue(weightedPipeline)} sub="Probability-adjusted" color="#f97316"
+          tooltip={{ metric: 'Weighted Pipeline', source: 'leads table (status=active)', method: 'SUM(expected_revenue × stage_probability) — e.g. Negotiation × 80%, Proposal × 65%', confidence: 'Estimated', refreshRate: 'Real-time' }} />
         <KpiCard label="Active Opportunities" value={activePipelineCount.toString()} sub="Across all stages"
           tooltip={{ metric: 'Active Opportunities', source: 'leads table', method: 'COUNT(*) WHERE status=active', confidence: 'High', refreshRate: 'Real-time' }} />
         <KpiCard label="Avg Lead Score" value={avgScore.toFixed(0)} sub="Weighted by count" color={scoreColor(avgScore)}
@@ -361,11 +365,11 @@ export default function DashboardPage() {
 
       {/* Row 1 */}
       <div className="grid grid-cols-3 gap-4 mb-4">
-        {/* Sales by Quarter */}
+        {/* Past Closed Deals */}
         <div className="card col-span-1">
           <div className="text-sm font-medium text-[#dde3ed] mb-4 flex items-center gap-1">
-            Sales by Quarter
-            <DataSourceTooltip metric="Sales by Quarter" source="leads table" method="SUM(expected_revenue) grouped by close_date quarter, status=won" confidence="High" refreshRate="Real-time" />
+            Past Closed Deals
+            <DataSourceTooltip metric="Past Closed Deals" source="leads table" method="SUM(expected_revenue) grouped by close_date quarter, status=won" confidence="High" refreshRate="Real-time" />
           </div>
           {data.quarterly.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
@@ -384,7 +388,7 @@ export default function DashboardPage() {
           ) : (
             <div className="flex items-center justify-center h-48 text-[#4a5568] text-sm">No closed deals yet</div>
           )}
-          <a href="/pipeline" className="text-xs text-[#38bdf8] mt-2 block">View Report (Closed Won by Quarter)</a>
+          <div className="text-[10px] text-[#4a5568] mt-2">Closed Won deals grouped by quarter · status = won</div>
         </div>
 
         {/* Potential Sales by Stage */}

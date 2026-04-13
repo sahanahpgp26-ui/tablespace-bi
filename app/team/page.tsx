@@ -73,6 +73,10 @@ interface Employee {
   calls: number;
   meetings: number;
   demos: number;
+  won_30d_count: number;
+  won_30d_revenue: number;
+  lost_30d_count: number;
+  lost_30d_revenue: number;
   stage_breakdown: StageBreakdown[];
   leads: LeadRow[];
 }
@@ -443,30 +447,42 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Leaderboard strip */}
+      {/* Leaderboard strip — Last 30 Days */}
       <div className="card mb-5 p-4" style={{ borderRadius: '10px' }}>
-        <div className="text-xs text-[#8896aa] mb-3 flex items-center gap-1">
-          🏆 Revenue Leaderboard
-          <DataSourceTooltip metric="Leaderboard" source="leads table + employees" method="SUM(expected_revenue WHERE status=won) per employee, ordered DESC" confidence="High" refreshRate="Real-time" />
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs text-[#8896aa] flex items-center gap-1">
+            🏆 Revenue Leaderboard — Last 30 Days
+            <DataSourceTooltip metric="L30 Leaderboard" source="leads table + employees" method="SUM(expected_revenue WHERE status=won OR lost) per employee, updated_at >= now()-30d" confidence="High" refreshRate="Real-time" />
+          </div>
+          <div className="flex items-center gap-3 text-[9px] text-[#4a5568]">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{background:'#34d399'}}/>Closed Won</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{background:'#f43f5e'}}/>Closed Lost</span>
+          </div>
         </div>
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-4">
           {leaderboard.map((emp, rank) => {
-            const maxRev = leaderboard[0]?.won_revenue || 1;
-            const barH   = Math.max(24, Math.round((emp.won_revenue / maxRev) * 120));
+            const maxRev = Math.max(...leaderboard.map(e => e.won_30d_revenue + e.lost_30d_revenue), 1);
+            const wonH  = Math.max(8, Math.round((emp.won_30d_revenue  / maxRev) * 100));
+            const lostH = Math.max(0, Math.round((emp.lost_30d_revenue / maxRev) * 100));
+            const isSelected = selected?.id === emp.id;
             return (
-              <div key={emp.id} className="flex flex-col items-center gap-1.5 cursor-pointer" onClick={() => setSelected(emp)}>
-                <div className="font-mono text-[10px]" style={{ color: attainColor(emp.attainment_pct) }}>
-                  {fmtRevenue(emp.won_revenue)}
+              <div key={emp.id} className="flex flex-col items-center gap-1.5 cursor-pointer flex-1" onClick={() => setSelected(emp)}>
+                <div className="text-[9px] font-mono text-center" style={{ color: '#34d399' }}>
+                  {fmtRevenue(emp.won_30d_revenue)}
                 </div>
-                <div
-                  className="w-10 rounded-t-md transition-all"
-                  style={{ height: barH, background: emp.avatar_color, opacity: selected?.id === emp.id ? 1 : 0.6 }}
-                />
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-black"
-                  style={{ background: emp.avatar_color }}
-                >{initials(emp.name)}</div>
-                <div className="text-[10px] text-[#8896aa] text-center w-16 truncate">{emp.name.split(' ')[0]}</div>
+                <div className="flex items-end gap-0.5 justify-center">
+                  <div className="w-5 rounded-t-sm transition-all" title={`Won: ${fmtRevenue(emp.won_30d_revenue)}`}
+                    style={{ height: `${wonH}px`, background: '#34d399', opacity: isSelected ? 1 : 0.55 }} />
+                  {lostH > 0 && (
+                    <div className="w-5 rounded-t-sm transition-all" title={`Lost: ${fmtRevenue(emp.lost_30d_revenue)}`}
+                      style={{ height: `${lostH}px`, background: '#f43f5e', opacity: isSelected ? 1 : 0.45 }} />
+                  )}
+                </div>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-black"
+                  style={{ background: emp.avatar_color, outline: isSelected ? `2px solid ${emp.avatar_color}` : 'none', outlineOffset: '2px' }}>
+                  {initials(emp.name)}
+                </div>
+                <div className="text-[9px] text-[#8896aa] text-center truncate w-full px-1">{emp.name.split(' ')[0]}</div>
                 {rank === 0 && <div className="text-[10px]">👑</div>}
               </div>
             );

@@ -230,12 +230,13 @@ export default function CityPage({ params }: { params: { city: string } }) {
 
   const filtered = centres.filter(c => typeFilter === 'All' || c.centre_type === typeFilter);
 
-  const totalSqft = centres.reduce((s, c) => s + c.sqft, 0);
-  const totalSeats = centres.reduce((s, c) => s + c.total_seats, 0);
-  const totalOcc = centres.reduce((s, c) => s + c.occupied_seats, 0);
-  const totalAvail = centres.reduce((s, c) => s + c.available_seats, 0);
-  const avgRev = centres.length ? Math.round(centres.reduce((s, c) => s + c.revenue_per_seat, 0) / centres.length) : 0;
-  const avgOcc = totalSeats > 0 ? Math.round(totalOcc / totalSeats * 100) : 0;
+  const totalSqft    = centres.reduce((s, c) => s + c.sqft, 0);
+  const totalSeats   = centres.reduce((s, c) => s + c.total_seats, 0);
+  const totalOcc     = centres.reduce((s, c) => s + c.occupied_seats, 0);
+  const totalAvail   = centres.reduce((s, c) => s + c.available_seats, 0);
+  const totalNonUsable = centres.reduce((s, c) => s + (c.non_usable_seats || 0), 0);
+  const avgRev       = centres.length ? Math.round(centres.reduce((s, c) => s + c.revenue_per_seat, 0) / centres.length) : 0;
+  const avgOcc       = totalSeats > 0 ? Math.round(totalOcc / totalSeats * 100) : 0;
 
   return (
     <div className="p-6 page-enter flex" style={{ position: 'relative', minHeight: '100vh' }}>
@@ -286,6 +287,58 @@ export default function CityPage({ params }: { params: { city: string } }) {
           ))}
         </div>
 
+        {/* City-wide seat distribution bar */}
+        {!loading && totalSeats > 0 && (
+          <div className="card mb-4 p-3">
+            <div className="flex items-center justify-between text-[10px] text-[#8896aa] mb-2">
+              <span className="font-medium">Seat Distribution — {cityName}</span>
+              <span className="font-mono text-[#4a5568]">{totalSeats.toLocaleString()} total seats</span>
+            </div>
+            <div className="flex h-7 rounded-lg overflow-hidden gap-px">
+              {totalOcc > 0 && (
+                <div
+                  className="flex items-center justify-center text-[10px] text-white font-semibold transition-all"
+                  style={{ width: `${(totalOcc / totalSeats) * 100}%`, background: '#34d399', minWidth: '24px' }}
+                  title={`Occupied: ${totalOcc}`}
+                >
+                  {totalOcc > totalSeats * 0.12 && totalOcc}
+                </div>
+              )}
+              {totalAvail > 0 && (
+                <div
+                  className="flex items-center justify-center text-[10px] text-white font-semibold transition-all"
+                  style={{ width: `${(totalAvail / totalSeats) * 100}%`, background: '#38bdf8', minWidth: '24px' }}
+                  title={`Available: ${totalAvail}`}
+                >
+                  {totalAvail > totalSeats * 0.12 && totalAvail}
+                </div>
+              )}
+              {totalNonUsable > 0 && (
+                <div
+                  className="flex items-center justify-center text-[10px] text-[#4a5568] font-semibold transition-all"
+                  style={{ width: `${(totalNonUsable / totalSeats) * 100}%`, background: '#1e2530', minWidth: '16px' }}
+                  title={`Non-usable: ${totalNonUsable}`}
+                />
+              )}
+            </div>
+            <div className="flex gap-5 mt-2 text-[10px] text-[#8896aa]">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#34d399' }} />
+                Occupied <span className="font-mono text-[#dde3ed] ml-1">{totalOcc}</span>
+                <span className="text-[#4a5568]">({Math.round(totalOcc / totalSeats * 100)}%)</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#38bdf8' }} />
+                Available <span className="font-mono text-[#dde3ed] ml-1">{totalAvail}</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#1e2530' }} />
+                Non-usable <span className="font-mono text-[#4a5568] ml-1">{totalNonUsable}</span>
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Type filter */}
         <div className="flex gap-2 mb-5">
           {['All', 'IT Park', 'CBD', 'Premium', 'Emerging'].map(t => (
@@ -325,18 +378,11 @@ export default function CityPage({ params }: { params: { city: string } }) {
 
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] mb-2">
                     <div><span className="text-[#4a5568]">Sqft: </span><span className="font-mono text-[#dde3ed]">{(centre.sqft / 1000).toFixed(0)}K</span></div>
-                    <div><span className="text-[#4a5568]">Total: </span><span className="font-mono text-[#dde3ed]">{centre.total_seats}</span></div>
+                    <div><span className="text-[#4a5568]">Occupancy: </span><span className="font-mono font-semibold" style={{ color: occupancyColor(occ) }}>{occ}%</span></div>
                     <div><span className="text-[#4a5568]">Occupied: </span><span className="font-mono" style={{ color: '#34d399' }}>{centre.occupied_seats}</span></div>
                     <div><span className="text-[#4a5568]">Available: </span><span className="font-mono" style={{ color: '#38bdf8' }}>{centre.available_seats}</span></div>
+                    <div><span className="text-[#4a5568]">Total: </span><span className="font-mono text-[#dde3ed]">{centre.total_seats}</span></div>
                     <div><span className="text-[#4a5568]">Rev/seat: </span><span className="font-mono" style={{ color: '#f97316' }}>₹{centre.revenue_per_seat.toLocaleString()}</span></div>
-                  </div>
-
-                  <div className="mb-1 flex justify-between text-[10px]">
-                    <span className="text-[#4a5568]">Occupancy</span>
-                    <span className="font-mono" style={{ color: occupancyColor(occ) }}>{occ}%</span>
-                  </div>
-                  <div className="score-bar">
-                    <div className="score-fill" style={{ width: `${occ}%`, background: occupancyColor(occ) }} />
                   </div>
                 </div>
               );

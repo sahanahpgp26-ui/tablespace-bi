@@ -49,6 +49,23 @@ export function GET() {
     GROUP BY quarter ORDER BY close_date
   `).all();
 
+  // Probability-weighted pipeline
+  const weightedPipeline = db.prepare(`
+    SELECT SUM(
+      CASE stage
+        WHEN 'Prospecting'         THEN expected_revenue * 0.10
+        WHEN 'Qualification'       THEN expected_revenue * 0.20
+        WHEN 'Needs Analysis'      THEN expected_revenue * 0.25
+        WHEN 'Value Proposition'   THEN expected_revenue * 0.35
+        WHEN 'Id. Decision Makers' THEN expected_revenue * 0.40
+        WHEN 'Perception Analysis' THEN expected_revenue * 0.50
+        WHEN 'Proposal/Price Quote' THEN expected_revenue * 0.65
+        WHEN 'Negotiation/Review'  THEN expected_revenue * 0.80
+        ELSE expected_revenue * 0.10
+      END
+    ) as total FROM leads WHERE status = 'active'
+  `).get() as { total: number };
+
   // Stage funnel
   const stageOrder = ['Prospecting','Qualification','Needs Analysis','Value Proposition','Id. Decision Makers','Perception Analysis','Proposal/Price Quote','Negotiation/Review'];
   const funnelData = stageOrder.map(stage => {
@@ -72,6 +89,7 @@ export function GET() {
     stage_stats: stageStats,
     won_stats: wonStats,
     total_pipeline: totalPipeline.total || 0,
+    weighted_pipeline: weightedPipeline.total || 0,
     by_source: bySource,
     by_city: byCity,
     quarterly,

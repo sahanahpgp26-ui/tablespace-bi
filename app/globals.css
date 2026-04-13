@@ -190,6 +190,24 @@ body {
   transform: translateX(0);
 }
 
+/* Filter select (pipeline dropdowns) */
+.filter-sel {
+  background: #161b23;
+  border: 1px solid #1e2530;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #8896aa;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.filter-sel:focus,
+.filter-sel:hover {
+  border-color: #2d3848;
+  color: #dde3ed;
+}
+
 /* Badge */
 .badge {
   display: inline-flex;
