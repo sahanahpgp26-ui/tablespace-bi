@@ -47,14 +47,22 @@ export default function PricingPage() {
     return <div className="p-6"><div className="grid grid-cols-4 gap-4">{[...Array(4)].map((_, i) => <div key={i} className="card h-24 animate-pulse" style={{ background: '#161b23' }} />)}</div></div>;
   }
 
-  // KPIs from latest prices
-  const thisMonthPrices = data.latest.filter(r => r.company !== 'TableSpace').map(r => r.price_per_seat);
-  const marketMedian = thisMonthPrices.sort((a, b) => a - b)[Math.floor(thisMonthPrices.length / 2)] || 0;
-  const ourAvg = data.latest.filter(r => r.company === 'TableSpace').reduce((s, r) => s + r.price_per_seat, 0) /
-    Math.max(1, data.latest.filter(r => r.company === 'TableSpace').length);
-  const premiumPct = ((ourAvg - marketMedian) / marketMedian * 100);
-  const cheapest = data.latest.filter(r => r.company !== 'TableSpace').sort((a, b) => a.price_per_seat - b.price_per_seat)[0];
-  const mostExp = data.latest.filter(r => r.company !== 'TableSpace').sort((a, b) => b.price_per_seat - a.price_per_seat)[0];
+  // Per-city positioning (the only meaningful way to compare)
+  // Cross-city averages are intentionally NOT used — Mumbai CBD commands ₹14-18k/seat
+  // while Hyderabad tech parks are ₹7-10k. Blending them produces a meaningless number
+  // that no pricing decision can be anchored to.
+  const cityPositioning = data.city_stats.map(row => {
+    const compRange = row.market_max - row.market_min;
+    const ourRelative = compRange > 0 ? ((row.our_price - row.market_min) / compRange) * 100 : 50;
+    const position = row.our_price > row.market_max ? 'Above Market' :
+      row.our_price > row.market_median ? 'Premium' :
+      row.our_price < row.market_min ? 'Below Floor' : 'Competitive';
+    const posColor = position === 'Above Market' ? '#f87171' : position === 'Premium' ? '#fbbf24' : position === 'Below Floor' ? '#a78bfa' : '#34d399';
+    return { ...row, ourRelative, position, posColor, compRange };
+  });
+  const citiesAboveMedian = cityPositioning.filter(c => c.our_price >= c.market_median).length;
+  const highestPremiumCity = [...cityPositioning].sort((a, b) => (b.our_price - b.market_median) - (a.our_price - a.market_median))[0];
+  const mostCompetitiveCity = [...cityPositioning].sort((a, b) => Math.abs(a.our_price - a.market_median) - Math.abs(b.our_price - b.market_median))[0];
 
   // Grouped bar chart data (by city)
   const barData = CITIES.map(city => {
@@ -77,7 +85,7 @@ export default function PricingPage() {
     return row;
   });
 
-  const insight = `TableSpace is ${premiumPct >= 0 ? `₹${Math.round(ourAvg - marketMedian).toLocaleString()} above` : `₹${Math.round(marketMedian - ourAvg).toLocaleString()} below`} market median across cities. Awfis remains the lowest-cost serious competitor at ₹${data.latest.filter(r => r.company === 'Awfis').reduce((s, r, _, a) => s + r.price_per_seat / a.length, 0).toFixed(0)}/seat avg. ${data.city_stats.filter(c => c.recommended.includes('discount')).length} cities show our price above market max.`;
+  const insight = `Per-city analysis: TableSpace is above market median in ${citiesAboveMedian}/${data.city_stats.length} cities. Strongest premium in ${highestPremiumCity?.city || '—'} (₹${highestPremiumCity ? (highestPremiumCity.our_price - highestPremiumCity.market_median).toLocaleString() : 0} above median). Most competitively priced in ${mostCompetitiveCity?.city || '—'}. ${data.city_stats.filter(c => c.recommended.includes('discount')).length} cities flagged for pricing review.`;
 
   return (
     <div className="p-6 page-enter">
@@ -91,44 +99,77 @@ export default function PricingPage() {
 
       <InsightCallout insight={insight} />
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <KpiCard
-          label="Market Median Price"
-          value={`₹${marketMedian.toLocaleString()}`}
-          sub="This quarter, all cities"
-          tooltip={{ metric: 'Market Median Price', source: 'pricing_history table', method: 'MEDIAN(price_per_seat) WHERE company != TableSpace, latest quarter', confidence: 'Medium', refreshRate: 'Quarterly' }}
-        />
-        <KpiCard
-          label="Our Premium vs Median"
-          value={`${premiumPct >= 0 ? '+' : ''}${premiumPct.toFixed(1)}%`}
-          sub={`Our avg: ₹${Math.round(ourAvg).toLocaleString()}`}
-          color={premiumPct > 10 ? '#fbbf24' : premiumPct < -5 ? '#34d399' : '#8896aa'}
-          tooltip={{ metric: 'Premium vs Median', source: 'pricing_history table (internal + competitor)', method: '(OurAvgPrice - MarketMedian) / MarketMedian × 100', confidence: 'Medium', refreshRate: 'Quarterly' }}
-        />
-        <KpiCard
-          label="Market Price Spread"
-          value={`₹${((mostExp?.price_per_seat || 0) - (cheapest?.price_per_seat || 0)).toLocaleString()}`}
-          sub={`${cheapest?.company || '—'} → ${mostExp?.company || '—'}`}
-          color="#38bdf8"
-          tooltip={{ metric: 'Market Price Spread', source: 'pricing_history table', method: 'MAX(price) − MIN(price) WHERE company ≠ TableSpace, latest quarter — shows pricing range we operate within', confidence: 'Medium', refreshRate: 'Quarterly' }}
-        />
-        <KpiCard
-          label="Most Expensive Competitor"
-          value={`₹${mostExp?.price_per_seat.toLocaleString() || '—'}`}
-          sub={mostExp?.company || ''}
-          color="#34d399"
-          tooltip={{ metric: 'Most Expensive Competitor', source: 'pricing_history table', method: 'MAX(price_per_seat) WHERE company != TableSpace, latest quarter', confidence: 'Medium', refreshRate: 'Quarterly' }}
-        />
+      {/* Methodology card — explains why per-city matters */}
+      <div className="card mb-5 p-4" style={{ borderLeft: '3px solid #38bdf8' }}>
+        <div className="flex items-start gap-3">
+          <div className="text-xl shrink-0">📐</div>
+          <div>
+            <div className="text-sm font-semibold text-[#dde3ed] mb-1">Why we analyse pricing per city, not as a market average</div>
+            <div className="text-xs text-[#8896aa] leading-relaxed">
+              Flex space pricing is <span className="text-[#dde3ed]">entirely driven by local supply/demand</span> — Mumbai CBD desks command ₹14–18k/seat while Hyderabad tech park desks are ₹7–10k.
+              A blended "market median across all cities" mixes incomparable micro-markets and produces a number no pricing decision can be anchored to.
+              Instead we benchmark <span className="text-[#dde3ed]">TableSpace vs competitors within each city</span> and define our positioning target:
+              stay in the <span className="text-[#fbbf24]">top-third of each city's range</span> (premium over mass-market operators like Awfis, below WeWork's CBD ceiling)
+              to justify our quality positioning without pricing out mid-market Enterprise clients.
+            </div>
+            <div className="flex gap-4 mt-2.5 text-[10px]">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{background:'#34d399'}} />Competitive — within market range, near median</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{background:'#fbbf24'}} />Premium — above median, below market max</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{background:'#f87171'}} />Above Market — risk of losing price-sensitive deals</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Per-city positioning tiles */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {cityPositioning.map(c => {
+          const pctOfRange = c.compRange > 0 ? Math.round(((c.our_price - c.market_min) / c.compRange) * 100) : 50;
+          return (
+            <div key={c.city} className="card p-4" style={{ borderTop: `2px solid ${c.posColor}` }}>
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="font-semibold text-[#dde3ed] text-sm">{c.city}</div>
+                  <span className="badge text-[10px] mt-1" style={{ background: `${c.posColor}20`, color: c.posColor }}>{c.position}</span>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono font-bold text-lg" style={{ color: '#f97316' }}>₹{c.our_price.toLocaleString()}</div>
+                  <div className="text-[9px] text-[#4a5568]">our price/seat/mo</div>
+                </div>
+              </div>
+              {/* Range bar */}
+              <div className="relative mb-2">
+                <div className="h-1.5 rounded-full bg-[#1e2530]" />
+                <div className="absolute inset-y-0 rounded-full" style={{
+                  left: `${Math.max(0, pctOfRange - 4)}%`,
+                  width: '8px',
+                  background: c.posColor,
+                  top: 0,
+                }} />
+              </div>
+              <div className="flex justify-between text-[9px] text-[#4a5568] mb-2">
+                <span>₹{c.market_min.toLocaleString()} min</span>
+                <span>₹{c.market_median.toLocaleString()} median</span>
+                <span>₹{c.market_max.toLocaleString()} max</span>
+              </div>
+              <div className="text-[10px]" style={{ color: c.posColor }}>
+                {c.our_price > c.market_median
+                  ? `₹${(c.our_price - c.market_median).toLocaleString()} above median`
+                  : `₹${(c.market_median - c.our_price).toLocaleString()} below median`}
+                {' · '}{c.recommended}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Grouped bar chart */}
       <div className="card mb-5">
         <div className="text-sm font-medium text-[#dde3ed] mb-1 flex items-center gap-1">
-          Price per Seat by City — All Operators
+          Price per Seat — All Operators by City
           <DataSourceTooltip metric="Price by City" source="pricing_history table" method="Latest price_per_seat per competitor per city" confidence="Medium" refreshRate="Quarterly" />
         </div>
-        <div className="text-[10px] text-[#4a5568] mb-4">TableSpace bar always in orange · Hover for exact price + source</div>
+        <div className="text-[10px] text-[#4a5568] mb-4">Compare within each city group only — cross-city comparison is not meaningful due to different market forces · TableSpace in orange</div>
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={barData} margin={{ left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -153,7 +194,7 @@ export default function PricingPage() {
       {/* Trend chart */}
       <div className="card mb-5">
         <div className="text-sm font-medium text-[#dde3ed] mb-1 flex items-center gap-1">
-          Price Trend — 4 Quarters (Avg across cities)
+          Price Trend — 4 Quarters (Per-operator avg, directional only)
           <DataSourceTooltip metric="Price Trend" source="pricing_history table" method="AVG(price_per_seat) per company per quarter, across all cities" confidence="Medium" refreshRate="Quarterly" />
         </div>
         <ResponsiveContainer width="100%" height={220}>

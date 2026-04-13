@@ -366,7 +366,7 @@ export default function CompetitorsPage() {
         </div>
 
         {/* Right: Market share chart */}
-        <div className="card">
+        <div className="card self-start">
           <div className="text-sm font-medium text-[#dde3ed] mb-1 flex items-center gap-1">
             Market Share Trend — All Players
             <DataSourceTooltip

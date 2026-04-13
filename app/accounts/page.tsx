@@ -172,7 +172,7 @@ function AccountModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
             { label: 'Annual Contract Value', value: fmtRevenue(lead.expected_revenue), color: '#34d399' },
             { label: 'Seats Contracted', value: (lead.seats_required || 0).toString(), color: '#dde3ed' },
             { label: 'Rev / Seat / Month', value: revPerSeat > 0 ? `₹${revPerSeat.toLocaleString()}` : '—', color: revPerSeat > 0 && revPerSeat < 8000 ? '#f87171' : '#f97316' },
-            { label: 'Meeting Room Usage', value: `${meetingRoomUsage}%`, color: meetingRoomUsage > 85 ? '#f87171' : meetingRoomUsage > 75 ? '#fbbf24' : '#34d399' },
+            { label: 'Contract Age', value: lead.close_date ? (() => { const m = Math.floor((Date.now() - new Date(lead.close_date).getTime()) / (1000*60*60*24*30)); return m <= 0 ? 'New' : `${m} months`; })() : '—', color: '#a78bfa' },
           ].map(m => (
             <div key={m.label} className="rounded-lg p-3" style={{ background: '#161b23' }}>
               <div className="text-[10px] text-[#4a5568] mb-0.5">{m.label}</div>
@@ -181,23 +181,38 @@ function AccountModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
           ))}
         </div>
 
-        {/* Account Signals row */}
-        <div className="flex gap-2 mb-4 flex-wrap">
-          <div className="flex-1 rounded-lg p-2.5" style={{ background: '#161b23', minWidth: '110px' }}>
-            <div className="text-[9px] text-[#4a5568] mb-0.5">Meeting Room Usage</div>
-            <div className="font-mono font-bold text-sm" style={{ color: meetingRoomUsage > 85 ? '#f87171' : meetingRoomUsage > 75 ? '#fbbf24' : '#34d399' }}>{meetingRoomUsage}%</div>
-          </div>
-          <div className="flex-1 rounded-lg p-2.5" style={{ background: '#161b23', minWidth: '110px' }}>
-            <div className="text-[9px] text-[#4a5568] mb-0.5">Last Renewal</div>
-            <div className="font-mono font-bold text-sm text-[#8896aa]">
-              {lead.close_date ? (() => { const months = Math.max(0, Math.floor((Date.now() - new Date(lead.close_date).getTime()) / (1000 * 60 * 60 * 24 * 30))); return months === 0 ? 'This month' : `${months}mo ago`; })() : '—'}
+        {/* Upsell whitespace signals */}
+        <div className="rounded-lg p-3 mb-4" style={{ background: '#0d1117', border: '1px solid #1e2530' }}>
+          <div className="text-[10px] font-semibold text-[#8896aa] uppercase tracking-wider mb-2.5">Upsell Whitespace — Why this score?</div>
+          <div className="grid grid-cols-3 gap-2">
+            {/* VAS Attach Rate */}
+            <div className="rounded p-2" style={{ background: '#161b23' }}>
+              <div className="text-[9px] text-[#4a5568] mb-1">VAS Attach Rate</div>
+              <div className="font-mono font-bold text-sm" style={{ color: untaken.length > 4 ? '#f87171' : untaken.length > 2 ? '#fbbf24' : '#34d399' }}>
+                {services.length}/{VAS_CATALOG.length} services
+              </div>
+              <div className="text-[9px] text-[#4a5568] mt-0.5">{untaken.length} gaps = {fmtRevenue(vasPot)}/yr potential</div>
+            </div>
+            {/* Seat headroom */}
+            <div className="rounded p-2" style={{ background: '#161b23' }}>
+              <div className="text-[9px] text-[#4a5568] mb-1">Seat Tier Headroom</div>
+              <div className="font-mono font-bold text-sm" style={{ color: (lead.seats_required||0) < 70 ? '#f97316' : (lead.seats_required||0) < 150 ? '#fbbf24' : '#8896aa' }}>
+                {(lead.seats_required||0) < 70 ? 'SME → Growth gap' : (lead.seats_required||0) < 150 ? 'Growth → Enterprise' : 'Enterprise ✓'}
+              </div>
+              <div className="text-[9px] text-[#4a5568] mt-0.5">{(lead.seats_required||0)} seats now</div>
+            </div>
+            {/* Renewal proximity */}
+            <div className="rounded p-2" style={{ background: '#161b23' }}>
+              <div className="text-[9px] text-[#4a5568] mb-1">Renewal Proximity</div>
+              <div className="font-mono font-bold text-sm" style={{ color: daysToRenewal < 30 ? '#f87171' : daysToRenewal < 90 ? '#fbbf24' : '#34d399' }}>
+                {daysToRenewal < 0 ? 'Overdue' : `${daysToRenewal}d`}
+              </div>
+              <div className="text-[9px] text-[#4a5568] mt-0.5">{daysToRenewal < 90 ? 'Renewal window open' : 'Relationship building'}</div>
             </div>
           </div>
-          <div className="flex-1 rounded-lg p-2.5" style={{ background: '#161b23', minWidth: '110px' }}>
-            <div className="text-[9px] text-[#4a5568] mb-0.5">Growth Signal</div>
-            <div className="font-mono font-bold text-sm" style={{ color: upsellScore >= 70 ? '#f97316' : upsellScore >= 45 ? '#fbbf24' : '#38bdf8' }}>
-              {upsellScore >= 70 ? 'Expanding' : upsellScore >= 45 ? 'Stable' : 'Risk'}
-            </div>
+          {/* Score breakdown inline */}
+          <div className="mt-2 pt-2 border-t border-[#1e2530] text-[9px] text-[#4a5568]">
+            Score = base(15) + tier headroom({(lead.seats_required||0)<70?22:(lead.seats_required||0)<150?12:0}pt) + renewal({daysToRenewal<30?28:daysToRenewal<90?18:daysToRenewal<180?8:0}pt) + VAS gap({untaken.length>5?12:untaken.length>3?7:0}pt) + pricing delta({revPerSeat>0&&revPerSeat<8000?14:0}pt) = <span style={{color: usColor, fontWeight:700}}>{upsellScore}/100</span>
           </div>
         </div>
 
