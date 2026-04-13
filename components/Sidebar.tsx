@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, GitMerge, PlusSquare, Settings,
   Users, TrendingUp, Building2, Map, Globe,
-  ExternalLink, Layers, UserCheck
+  ExternalLink, Layers, UserCheck, Briefcase
 } from 'lucide-react';
 
 const SECTIONS = [
@@ -14,6 +14,7 @@ const SECTIONS = [
     items: [
       { label: 'Dashboard',        href: '/dashboard',  icon: LayoutDashboard },
       { label: 'Pipeline',         href: '/pipeline',   icon: GitMerge },
+      { label: 'Accounts',         href: '/accounts',   icon: Briefcase },
       { label: 'Team Performance', href: '/team',       icon: UserCheck },
     ],
   },

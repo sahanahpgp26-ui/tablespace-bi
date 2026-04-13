@@ -201,20 +201,10 @@ export default function SpacePage() {
                 </span>
               </div>
 
-              {/* Occupancy bar */}
-              <div className="mb-2">
-                <div className="flex justify-between text-[11px] mb-1">
-                  <span className="text-[#8896aa]">Occupancy</span>
-                  <span className="font-mono font-semibold" style={{ color: occupancyColor(city.pct) }}>{city.pct}%</span>
-                </div>
-                <div className="score-bar">
-                  <div className="score-fill" style={{ width: `${city.pct}%`, background: occupancyColor(city.pct) }} />
-                </div>
-              </div>
-
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] mb-3">
-                <div><span className="text-[#4a5568]">Total seats: </span><span className="font-mono text-[#dde3ed]">{city.total.toLocaleString()}</span></div>
+                <div><span className="text-[#4a5568]">Occupancy: </span><span className="font-mono font-semibold" style={{ color: occupancyColor(city.pct) }}>{city.pct}%</span></div>
                 <div><span className="text-[#4a5568]">Available: </span><span className="font-mono" style={{ color: '#38bdf8' }}>{city.available.toLocaleString()}</span></div>
+                <div><span className="text-[#4a5568]">Total seats: </span><span className="font-mono text-[#dde3ed]">{city.total.toLocaleString()}</span></div>
                 <div><span className="text-[#4a5568]">Rev/seat: </span><span className="font-mono text-[#f97316]">₹{city.revPerSeat.toLocaleString()}</span></div>
               </div>
 

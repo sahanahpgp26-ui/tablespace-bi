@@ -14,9 +14,10 @@ interface Props {
     confidence: 'High' | 'Medium' | 'Estimated';
     refreshRate: string;
   };
+  link?: { href: string; label: string };
 }
 
-export default function KpiCard({ label, value, sub, trend, trendUp, color, tooltip }: Props) {
+export default function KpiCard({ label, value, sub, trend, trendUp, color, tooltip, link }: Props) {
   return (
     <div className="card flex flex-col gap-2" style={{ minWidth: 0 }}>
       <div className="flex items-center gap-1 text-xs text-[#8896aa]">
@@ -35,6 +36,9 @@ export default function KpiCard({ label, value, sub, trend, trendUp, color, tool
           <span>{trendUp ? '↑' : '↓'}</span>
           <span>{trend}</span>
         </div>
+      )}
+      {link && (
+        <a href={link.href} className="text-xs text-[#38bdf8] hover:underline mt-1 block">{link.label}</a>
       )}
     </div>
   );

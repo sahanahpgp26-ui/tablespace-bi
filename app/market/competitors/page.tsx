@@ -36,7 +36,19 @@ const RISK_COLORS = { High: '#f87171', Medium: '#fbbf24', Low: '#34d399' };
 const TREND_ICON = { growing: '↑', stable: '→', declining: '↓' };
 const TREND_COLOR = { growing: '#34d399', stable: '#8896aa', declining: '#f87171' };
 
-const LINE_COLORS = ['#f97316', '#38bdf8', '#34d399', '#a78bfa', '#fbbf24', '#f87171', '#c084fc'];
+const COMP_CHART_COLORS: Record<string, string> = {
+  'TableSpace':   '#f97316',
+  'WeWork India': '#60a5fa',
+  'Awfis':        '#34d399',
+  'IndiQube':     '#a78bfa',
+  'Smartworks':   '#fbbf24',
+  'Cowrks':       '#f43f5e',
+  'Skootr':       '#c084fc',
+};
+const COMP_FALLBACK = ['#60a5fa','#34d399','#a78bfa','#fbbf24','#f43f5e','#c084fc','#e879f9'];
+function getCompColor(name: string, fallbackIdx: number): string {
+  return COMP_CHART_COLORS[name] ?? COMP_FALLBACK[fallbackIdx % COMP_FALLBACK.length];
+}
 
 const METRIC_TOOLTIPS = {
   sqft: { metric: 'Total Sqft', source: 'MCA21 lease filings + JLL broker reports + Google Maps area proxy', method: 'Sum of active lease agreements filed + estimated from satellite/Maps', confidence: 'Medium' as const, refreshRate: 'Quarterly' },
@@ -45,6 +57,23 @@ const METRIC_TOOLTIPS = {
   review: { metric: 'Review Score', source: 'Google Maps + JustDial + Glassdoor + community forums', method: 'Avg of verified review platforms, weighted by review count', confidence: 'High' as const, refreshRate: 'Monthly' },
   cities: { metric: 'Cities', source: 'Official website + MCA21 registered offices + broker directories', method: 'Cross-reference website city pages + RoC filings', confidence: 'High' as const, refreshRate: 'Quarterly' },
 };
+
+function getRiskRationale(comp: Competitor): string {
+  const { trend, risk_level } = comp;
+  if (risk_level === 'High') {
+    if (trend === 'declining')
+      return 'Declining operators often resort to aggressive price cuts or broker incentives to slow churn — poses immediate deal-economics risk in overlap cities despite shrinking footprint';
+    return 'Expanding aggressively in our core markets with funding-backed growth — active enterprise competition and pricing pressure';
+  }
+  if (risk_level === 'Medium') {
+    if (trend === 'growing') return 'Growing steadily — watch for enterprise deal wins and potential anchor-client poaching';
+    if (trend === 'declining') return 'Declining with moderate overlap — may cut prices to defend remaining clients; watch for discount-led attrition';
+    return 'Stable position with significant overlap in 2+ cities — steady pricing and product pressure';
+  }
+  // Low risk
+  if (trend === 'declining') return 'Contracting rapidly — opportunity to capture displaced enterprise clients. Low direct threat; monitor broker relationships for referrals.';
+  return 'Limited geographic or segment overlap — low direct threat. Re-evaluate if they expand into Bangalore or Mumbai CBD.';
+}
 
 function fmtSqft(n: number) {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M sqft`;
@@ -137,7 +166,7 @@ function ProfileModal({ comp, onClose }: { comp: Competitor; onClose: () => void
               <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
               <Legend />
               {cities.map((c, i) => (
-                <Line key={c} type="monotone" dataKey={c} stroke={LINE_COLORS[i % LINE_COLORS.length]} strokeWidth={1.5} dot={false} />
+                <Line key={c} type="monotone" dataKey={c} stroke={getCompColor(c, i)} strokeWidth={1.5} dot={false} />
               ))}
             </LineChart>
           </ResponsiveContainer>
@@ -187,6 +216,12 @@ export default function CompetitorsPage() {
   }
 
   const { competitors, all_share } = data;
+
+  const RISK_ORDER = { High: 0, Medium: 1, Low: 2 };
+  const sortedCompetitors = [...competitors].sort((a, b) =>
+    (RISK_ORDER[a.risk_level as keyof typeof RISK_ORDER] ?? 1) -
+    (RISK_ORDER[b.risk_level as keyof typeof RISK_ORDER] ?? 1)
+  );
 
   // KPI calcs
   const trackedCount = competitors.length;
@@ -266,7 +301,16 @@ export default function CompetitorsPage() {
         {/* Left: Competitor cards */}
         <div className="space-y-3">
           <div className="text-sm font-medium text-[#dde3ed] mb-2">Competitor Profiles</div>
-          {competitors.map(comp => {
+          <div className="flex items-center gap-3 mb-3 text-[10px] text-[#4a5568]">
+            <span>Risk order: highest threat first ↓</span>
+            {(['High','Medium','Low'] as const).map(r => (
+              <span key={r} className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full inline-block" style={{ background: RISK_COLORS[r] }} />
+                {r}
+              </span>
+            ))}
+          </div>
+          {sortedCompetitors.map(comp => {
             const riskColor = RISK_COLORS[comp.risk_level as keyof typeof RISK_COLORS] || '#8896aa';
             const trendColor = TREND_COLOR[comp.trend as keyof typeof TREND_COLOR] || '#8896aa';
             const sparkData = comp.market_share_trend.slice(0, 4).map(t => t.share_pct);
@@ -313,6 +357,9 @@ export default function CompetitorsPage() {
                 >
                   View full profile →
                 </button>
+                <div className="mt-2 text-[10px] text-[#4a5568] leading-relaxed border-t border-[#1e2530] pt-2">
+                  {getRiskRationale(comp)}
+                </div>
               </div>
             );
           })}
@@ -345,10 +392,10 @@ export default function CompetitorsPage() {
                   key={comp}
                   type="monotone"
                   dataKey={comp}
-                  stroke={comp === 'TableSpace' ? '#f97316' : LINE_COLORS[(i + 1) % LINE_COLORS.length]}
+                  stroke={getCompColor(comp, i)}
                   strokeWidth={comp === 'TableSpace' ? 3 : 1.5}
                   dot={false}
-                  opacity={comp === 'TableSpace' ? 1 : 0.7}
+                  opacity={comp === 'TableSpace' ? 1 : 0.75}
                 />
               ))}
             </LineChart>

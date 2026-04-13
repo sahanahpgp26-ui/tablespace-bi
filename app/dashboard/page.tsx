@@ -94,6 +94,8 @@ interface DashboardData {
   funnel:           { stage: string; count: number; revenue: number }[];
   by_account_type:  { account_type: string; count: number; revenue: number }[];
   recent_leads:     { id: number; company: string; contact_name: string; city: string; stage: string; score: number; source: string; expected_revenue: number; created_at: string }[];
+  win_rate?: number;
+  closing_this_month?: { count: number; revenue: number };
 }
 
 function fmtRevenue(n: number) {
@@ -298,6 +300,9 @@ export default function DashboardPage() {
   const wonCount            = data.won_stats?.count || 0;
   const totalPotential      = data.total_pipeline || 0;
   const weightedPipeline    = data.weighted_pipeline || 0;
+  const winRate = data.win_rate || 0;
+  const closingThisMonth = data.closing_this_month || { count: 0, revenue: 0 };
+  const avgDealSize = wonCount > 0 ? Math.round(wonRevenue / wonCount) : 0;
   const activePipelineCount = data.stage_stats.reduce((s, r) => s + r.count, 0);
   const avgScore = data.stage_stats.reduce((s, r) => s + r.avg_score * r.count, 0) /
     Math.max(1, activePipelineCount);
@@ -352,11 +357,14 @@ export default function DashboardPage() {
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <KpiCard label="Total Sales" value={fmtRevenue(wonRevenue)} sub={`${wonCount} deals closed`} color="#34d399"
-          tooltip={{ metric: 'Total Sales', source: 'leads table (status=won)', method: 'SUM(expected_revenue) WHERE status=won', confidence: 'High', refreshRate: 'Real-time' }} />
+          tooltip={{ metric: 'Total Sales', source: 'leads table (status=won)', method: 'SUM(expected_revenue) WHERE status=won', confidence: 'High', refreshRate: 'Real-time' }}
+          link={{ href: '/pipeline', label: 'View Pipeline →' }} />
         <KpiCard label="Total Potential Sales" value={fmtRevenue(totalPotential)} sub={`${activePipelineCount} active opportunities`} color="#38bdf8"
-          tooltip={{ metric: 'Total Potential Sales', source: 'leads table (status=active)', method: 'SUM(expected_revenue) WHERE status=active', confidence: 'Estimated', refreshRate: 'Real-time' }} />
+          tooltip={{ metric: 'Total Potential Sales', source: 'leads table (status=active)', method: 'SUM(expected_revenue) WHERE status=active', confidence: 'Estimated', refreshRate: 'Real-time' }}
+          link={{ href: '/pipeline', label: 'View Pipeline →' }} />
         <KpiCard label="Weighted Pipeline" value={fmtRevenue(weightedPipeline)} sub="Probability-adjusted" color="#f97316"
-          tooltip={{ metric: 'Weighted Pipeline', source: 'leads table (status=active)', method: 'SUM(expected_revenue × stage_probability) — e.g. Negotiation × 80%, Proposal × 65%', confidence: 'Estimated', refreshRate: 'Real-time' }} />
+          tooltip={{ metric: 'Weighted Pipeline', source: 'leads table (status=active)', method: 'SUM(expected_revenue × stage_probability) — e.g. Negotiation × 80%, Proposal × 65%', confidence: 'Estimated', refreshRate: 'Real-time' }}
+          link={{ href: '/pipeline', label: 'View Pipeline →' }} />
         <KpiCard label="Active Opportunities" value={activePipelineCount.toString()} sub="Across all stages"
           tooltip={{ metric: 'Active Opportunities', source: 'leads table', method: 'COUNT(*) WHERE status=active', confidence: 'High', refreshRate: 'Real-time' }} />
         <KpiCard label="Avg Lead Score" value={avgScore.toFixed(0)} sub="Weighted by count" color={scoreColor(avgScore)}
@@ -420,24 +428,29 @@ export default function DashboardPage() {
           <a href="/pipeline" className="text-xs text-[#38bdf8] mt-3 block">View Report (Opportunities by Stage)</a>
         </div>
 
-        {/* Total Sales + Total Potential cards */}
-        <div className="flex flex-col gap-4">
-          <div className="card flex-1">
-            <div className="text-xs text-[#8896aa] mb-1 flex items-center gap-1">
-              Total Sales
-              <DataSourceTooltip metric="Total Sales" source="leads table" method="SUM(expected_revenue) WHERE status=won" confidence="High" refreshRate="Real-time" />
-            </div>
-            <div className="kpi-num text-3xl font-bold" style={{ color: '#34d399' }}>{fmtRevenue(wonRevenue)}</div>
-            <a href="/pipeline" className="text-xs text-[#38bdf8] mt-2 block">View Report →</a>
+        {/* Deal velocity */}
+        <div className="card flex flex-col justify-between">
+          <div className="text-sm font-medium text-[#dde3ed] mb-3 flex items-center gap-1">
+            Deal Velocity
+            <DataSourceTooltip metric="Deal Velocity" source="leads table" method="win_rate = won/(won+lost); avg deal = won_revenue/won_count; closing = active leads with close_date this month" confidence="High" refreshRate="Real-time" />
           </div>
-          <div className="card flex-1">
-            <div className="text-xs text-[#8896aa] mb-1 flex items-center gap-1">
-              Total Potential Sales
-              <DataSourceTooltip metric="Total Potential Sales" source="leads table" method="SUM(expected_revenue) WHERE status=active" confidence="Estimated" refreshRate="Real-time" />
+          <div className="space-y-4 flex-1">
+            <div>
+              <div className="text-[10px] text-[#4a5568] mb-0.5">Win Rate</div>
+              <div className="font-mono text-2xl font-bold" style={{ color: winRate >= 50 ? '#34d399' : '#fbbf24' }}>{winRate}%</div>
+              <div className="text-[10px] text-[#4a5568] mt-0.5">of closed deals</div>
             </div>
-            <div className="kpi-num text-3xl font-bold" style={{ color: '#38bdf8' }}>{fmtRevenue(totalPotential)}</div>
-            <a href="/pipeline" className="text-xs text-[#38bdf8] mt-2 block">View Report →</a>
+            <div className="border-t border-[#1e2530] pt-3">
+              <div className="text-[10px] text-[#4a5568] mb-0.5">Avg Deal Size</div>
+              <div className="font-mono text-xl font-bold text-[#f97316]">{fmtRevenue(avgDealSize)}</div>
+            </div>
+            <div className="border-t border-[#1e2530] pt-3">
+              <div className="text-[10px] text-[#4a5568] mb-0.5">Closing This Month</div>
+              <div className="font-mono text-xl font-bold text-[#38bdf8]">{fmtRevenue(closingThisMonth.revenue)}</div>
+              <div className="text-[10px] text-[#4a5568] mt-0.5">{closingThisMonth.count} active deals</div>
+            </div>
           </div>
+          <a href="/pipeline" className="text-xs text-[#38bdf8] mt-4 block">View Pipeline →</a>
         </div>
       </div>
 

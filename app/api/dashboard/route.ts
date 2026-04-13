@@ -66,6 +66,18 @@ export function GET() {
     ) as total FROM leads WHERE status = 'active'
   `).get() as { total: number };
 
+  // Win rate + loss count
+  const lostStats = db.prepare(
+    "SELECT COUNT(*) as count FROM leads WHERE status = 'lost'"
+  ).get() as { count: number };
+
+  // Closing this month
+  const closingThisMonth = db.prepare(`
+    SELECT COUNT(*) as count, COALESCE(SUM(expected_revenue),0) as revenue
+    FROM leads WHERE status = 'active'
+      AND strftime('%Y-%m', close_date) = strftime('%Y-%m', 'now')
+  `).get() as { count: number; revenue: number };
+
   // Stage funnel
   const stageOrder = ['Prospecting','Qualification','Needs Analysis','Value Proposition','Id. Decision Makers','Perception Analysis','Proposal/Price Quote','Negotiation/Review'];
   const funnelData = stageOrder.map(stage => {
@@ -96,5 +108,9 @@ export function GET() {
     funnel: funnelData,
     by_account_type: byAccountType,
     recent_leads: recentLeads,
+    win_rate: (wonStats.count + lostStats.count) > 0
+      ? Math.round(wonStats.count / (wonStats.count + lostStats.count) * 100)
+      : 0,
+    closing_this_month: closingThisMonth,
   });
 }
