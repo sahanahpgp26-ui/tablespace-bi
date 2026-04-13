@@ -27,7 +27,7 @@ interface GeoZone {
 const REC_COLORS: Record<string, string> = { Expand: '#34d399', Watch: '#fbbf24', Monitor: '#38bdf8', Skip: '#f87171' };
 const CITIES = ['Bangalore', 'Mumbai', 'Gurugram', 'Hyderabad', 'Pune', 'Chennai'];
 
-function AnalysisModal({ zone, onClose }: { zone: GeoZone; onClose: () => void }) {
+function AnalysisModal({ zone, onClose, inline = false }: { zone: GeoZone; onClose: () => void; inline?: boolean }) {
   const recColor = REC_COLORS[zone.recommendation] || '#8896aa';
   const dims = [
     { label: 'Nightlight Index', value: zone.nightlight_index, weight: 25, source: 'NASA VIIRS GEE', method: 'Google Earth Engine VIIRS composite, 500m res', confidence: 'High' as const },
@@ -41,6 +41,69 @@ function AnalysisModal({ zone, onClose }: { zone: GeoZone; onClose: () => void }
     { action: 'Watch', condition: zone.expansion_score >= 65 && zone.expansion_score < 80, reason: 'Monitor quarterly. Trigger capex when score crosses 80.' },
     { action: 'Monitor', condition: zone.expansion_score < 65, reason: 'Not ready. Set data alerts. Review in 6 months.' },
   ];
+
+  // When inline=true, render bare content for the slide-over panel (no backdrop/card wrapper)
+  const content = (
+    <>
+      {/* Dimensions */}
+      <div className="mb-5">
+        <div className="text-sm font-medium text-[#dde3ed] mb-3">Score Breakdown (5 Dimensions)</div>
+        <div className="space-y-3">
+          {dims.map(d => (
+            <div key={d.label}>
+              <div className="flex items-center justify-between text-[11px] mb-1">
+                <div className="flex items-center gap-1">
+                  <span className="text-[#dde3ed]">{d.label}</span>
+                  <DataSourceTooltip metric={d.label} source={d.source} method={d.method} confidence={d.confidence} refreshRate="Quarterly" />
+                </div>
+                <div className="flex gap-2 text-[#4a5568]">
+                  <span>Weight: {d.weight}%</span>
+                  <span className="font-mono text-[#dde3ed]">{d.value.toFixed(0)}</span>
+                </div>
+              </div>
+              <div className="score-bar">
+                <div className="score-fill" style={{ width: `${Math.min(100, d.value)}%`, background: d.value >= 75 ? '#34d399' : d.value >= 50 ? '#fbbf24' : '#f87171' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-3 rounded-lg text-xs text-[#8896aa] mb-4" style={{ background: '#161b23' }}>
+        <div className="font-semibold text-[#dde3ed] mb-1">Infrastructure Notes</div>
+        {zone.infra_notes}
+      </div>
+
+      {/* Decision matrix */}
+      <div className="mb-4">
+        <div className="text-sm font-medium text-[#dde3ed] mb-2">Decision Matrix</div>
+        <div className="space-y-2">
+          {decisionMatrix.map(d => (
+            <div key={d.action} className="flex items-start gap-3 p-2 rounded" style={{ background: d.condition ? `${REC_COLORS[d.action] || '#8896aa'}15` : '#161b23', opacity: d.condition ? 1 : 0.5 }}>
+              <span className="badge text-[10px] shrink-0" style={{ background: `${REC_COLORS[d.action] || '#8896aa'}25`, color: REC_COLORS[d.action] || '#8896aa' }}>{d.action}</span>
+              <span className="text-[11px] text-[#8896aa]">{d.reason}</span>
+              {d.condition && <span className="ml-auto text-[#34d399] text-xs">✓</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-3 rounded-lg" style={{ background: '#161b23' }}>
+        <div className="text-xs font-semibold text-[#dde3ed] mb-1">Strategic Recommendation</div>
+        <div className="text-xs text-[#8896aa]">
+          {zone.recommendation === 'Expand'
+            ? `Proceed with 400–600 seat centre. IT Park format recommended for enterprise mix. IRR projection 22–26% at ₹${zone.avg_price_per_seat.toLocaleString()}/seat/month.`
+            : zone.recommendation === 'Watch'
+            ? `Set quarterly review trigger. Activate when expansion_score ≥ 80 or search_growth crosses 85. Low capex prep (site shortlist, broker NDA) advised.`
+            : zone.recommendation === 'Monitor'
+            ? `No action this cycle. Check-in at next quarterly geo review. Upside if ${zone.competitor_count === 0 ? 'first anchor tenant emerges' : 'competitor exits the market'}.`
+            : 'Do not allocate resources this cycle. Market fundamentals do not support flex space investment.'}
+        </div>
+      </div>
+    </>
+  );
+
+  if (inline) return <>{content}</>;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={onClose}>
@@ -58,62 +121,7 @@ function AnalysisModal({ zone, onClose }: { zone: GeoZone; onClose: () => void }
             <button onClick={onClose} className="text-[#8896aa] hover:text-[#dde3ed] text-xl ml-2">×</button>
           </div>
         </div>
-
-        {/* Dimensions */}
-        <div className="mb-5">
-          <div className="text-sm font-medium text-[#dde3ed] mb-3">Score Breakdown (5 Dimensions)</div>
-          <div className="space-y-3">
-            {dims.map(d => (
-              <div key={d.label}>
-                <div className="flex items-center justify-between text-[11px] mb-1">
-                  <div className="flex items-center gap-1">
-                    <span className="text-[#dde3ed]">{d.label}</span>
-                    <DataSourceTooltip metric={d.label} source={d.source} method={d.method} confidence={d.confidence} refreshRate="Quarterly" />
-                  </div>
-                  <div className="flex gap-2 text-[#4a5568]">
-                    <span>Weight: {d.weight}%</span>
-                    <span className="font-mono text-[#dde3ed]">{d.value.toFixed(0)}</span>
-                  </div>
-                </div>
-                <div className="score-bar">
-                  <div className="score-fill" style={{ width: `${Math.min(100, d.value)}%`, background: d.value >= 75 ? '#34d399' : d.value >= 50 ? '#fbbf24' : '#f87171' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-3 rounded-lg text-xs text-[#8896aa] mb-4" style={{ background: '#161b23' }}>
-          <div className="font-semibold text-[#dde3ed] mb-1">Infrastructure Notes</div>
-          {zone.infra_notes}
-        </div>
-
-        {/* Decision matrix */}
-        <div className="mb-4">
-          <div className="text-sm font-medium text-[#dde3ed] mb-2">Decision Matrix</div>
-          <div className="space-y-2">
-            {decisionMatrix.map(d => (
-              <div key={d.action} className="flex items-start gap-3 p-2 rounded" style={{ background: d.condition ? `${REC_COLORS[d.action] || '#8896aa'}15` : '#161b23', opacity: d.condition ? 1 : 0.5 }}>
-                <span className="badge text-[10px] shrink-0" style={{ background: `${REC_COLORS[d.action] || '#8896aa'}25`, color: REC_COLORS[d.action] || '#8896aa' }}>{d.action}</span>
-                <span className="text-[11px] text-[#8896aa]">{d.reason}</span>
-                {d.condition && <span className="ml-auto text-[#34d399] text-xs">✓</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-3 rounded-lg" style={{ background: '#161b23' }}>
-          <div className="text-xs font-semibold text-[#dde3ed] mb-1">Strategic Recommendation</div>
-          <div className="text-xs text-[#8896aa]">
-            {zone.recommendation === 'Expand'
-              ? `Proceed with 400–600 seat centre. IT Park format recommended for enterprise mix. IRR projection 22–26% at ₹${zone.avg_price_per_seat.toLocaleString()}/seat/month.`
-              : zone.recommendation === 'Watch'
-              ? `Set quarterly review trigger. Activate when expansion_score ≥ 80 or search_growth crosses 85. Low capex prep (site shortlist, broker NDA) advised.`
-              : zone.recommendation === 'Monitor'
-              ? `No action this cycle. Check-in at next quarterly geo review. Upside if ${zone.competitor_count === 0 ? 'first anchor tenant emerges' : 'competitor exits the market'}.`
-              : 'Do not allocate resources this cycle. Market fundamentals do not support flex space investment.'}
-          </div>
-        </div>
+        {content}
       </div>
     </div>
   );
@@ -139,7 +147,7 @@ function ScatterTooltip({ active, payload }: { active?: boolean; payload?: { pay
 export default function MarketsPage() {
   const [zones, setZones] = useState<GeoZone[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<GeoZone | null>(null);
+  const [selected, setSelected] = useState<GeoZone | null>(null);
   const [sortKey, setSortKey] = useState<keyof GeoZone>('expansion_score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [cityFilter, setCityFilter] = useState('All');
@@ -200,7 +208,8 @@ export default function MarketsPage() {
   if (loading) return <div className="p-6 text-[#8896aa]">Loading…</div>;
 
   return (
-    <div className="p-6 page-enter">
+    <div className="page-enter" style={{ display: 'flex', position: 'relative' }}>
+    <div className="p-6" style={{ flex: 1, marginRight: selected ? '460px' : '0', transition: 'margin-right 0.3s ease', minWidth: 0 }}>
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-semibold text-[#dde3ed]">Micro-Market Deep Dive</h1>
@@ -253,7 +262,7 @@ export default function MarketsPage() {
                 <tr
                   key={z.id}
                   className="border-b border-[#1e2530] hover:bg-[#161b23] transition-colors cursor-pointer"
-                  onClick={() => setModal(z)}
+                  onClick={() => setSelected(z)}
                 >
                   <td className="py-2 text-[#dde3ed] font-medium pr-4">{z.zone_name}</td>
                   <td className="py-2 text-[#8896aa] pr-4">{z.city}</td>
@@ -360,8 +369,45 @@ export default function MarketsPage() {
       </div>
 
       <LastUpdated />
+    </div>
 
-      {modal && <AnalysisModal zone={modal} onClose={() => setModal(null)} />}
+    {/* Slide-over panel */}
+    {selected && (
+      <div
+        style={{
+          position: 'fixed', top: 0, right: 0, bottom: 0, width: '460px',
+          background: '#0f1318', borderLeft: '1px solid #1e2530',
+          overflowY: 'auto', zIndex: 40,
+          boxShadow: '-8px 0 32px rgba(0,0,0,0.4)',
+          animation: 'slideInRight 0.25s ease',
+        }}
+      >
+        <style>{`@keyframes slideInRight { from { transform: translateX(100%); opacity:0; } to { transform: translateX(0); opacity:1; } }`}</style>
+        {/* Slide-over header */}
+        <div className="flex items-start justify-between p-5 border-b border-[#1e2530]" style={{ background: `${REC_COLORS[selected.recommendation] || '#8896aa'}0d` }}>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: REC_COLORS[selected.recommendation] || '#8896aa' }}>Micro-Market Analysis</div>
+            <div className="font-bold text-[#dde3ed] text-lg leading-tight">{selected.zone_name}</div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs text-[#8896aa]">{selected.city}</span>
+              <span className="badge text-[10px]" style={{ background: `${REC_COLORS[selected.recommendation]}25`, color: REC_COLORS[selected.recommendation] }}>{selected.recommendation}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="font-mono text-3xl font-bold" style={{ color: REC_COLORS[selected.recommendation] || '#8896aa' }}>{selected.expansion_score}</div>
+              <div className="text-[9px] text-[#4a5568]">expansion score</div>
+            </div>
+            <button onClick={() => setSelected(null)} className="text-[#8896aa] hover:text-[#dde3ed] text-2xl leading-none">×</button>
+          </div>
+        </div>
+
+        {/* Panel body */}
+        <div className="p-5">
+          <AnalysisModal zone={selected} onClose={() => setSelected(null)} inline />
+        </div>
+      </div>
+    )}
     </div>
   );
 }

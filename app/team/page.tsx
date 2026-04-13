@@ -314,21 +314,23 @@ function EmployeeDetail({ emp }: { emp: Employee }) {
   }));
 
   return (
-    <div className="card" style={{ borderRadius: '10px' }}>
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-4 pb-3 border-b border-[#1e2530]">
+    <div className="card" style={{ borderRadius: '10px', borderTop: `3px solid ${emp.avatar_color}` }}>
+      {/* Identity banner — always visible at top so it's obvious whose data this is */}
+      <div className="flex items-center gap-3 mb-4 pb-3 border-b border-[#1e2530]"
+        style={{ background: `linear-gradient(90deg, ${emp.avatar_color}12, transparent)`, borderRadius: '8px 8px 0 0', margin: '-16px -16px 16px -16px', padding: '14px 16px' }}>
         <div
-          className="w-12 h-12 rounded-full flex items-center justify-center text-base font-bold text-black shrink-0"
-          style={{ background: emp.avatar_color }}
+          className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold text-black shrink-0"
+          style={{ background: emp.avatar_color, outline: `3px solid ${emp.avatar_color}`, outlineOffset: '2px' }}
         >{initials(emp.name)}</div>
-        <div>
-          <div className="font-semibold text-[#dde3ed]">{emp.name}</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] uppercase tracking-widest mb-0.5" style={{ color: emp.avatar_color }}>Viewing rep</div>
+          <div className="font-bold text-[#dde3ed] text-base leading-tight">{emp.name}</div>
           <div className="text-xs text-[#8896aa]">{emp.role} · {emp.city}</div>
-          <div className="text-[11px] text-[#4a5568]">{emp.email}</div>
         </div>
-        <div className="ml-auto text-right">
+        <div className="text-right shrink-0">
           <div className="font-mono text-2xl font-bold" style={{ color: attainColor(emp.attainment_pct) }}>{emp.attainment_pct}%</div>
-          <div className="text-[10px] text-[#4a5568]">quota attainment</div>
+          <div className="text-[9px] text-[#4a5568]">quota attainment</div>
+          <div className="text-[9px] mt-0.5" style={{ color: '#34d399' }}>{fmtRevenue(emp.won_revenue)} won</div>
         </div>
       </div>
 
@@ -458,19 +460,28 @@ function EmployeeDetail({ emp }: { emp: Employee }) {
         </div>
       )}
 
-      {/* Full Report button */}
+      {/* L30 summary strip — always visible */}
       <div className="mt-4 pt-3 border-t border-[#1e2530]">
-        <button
-          onClick={() => setShowReport(p => !p)}
-          className="w-full py-2 rounded-md text-xs font-medium transition-colors"
-          style={{
-            background: showReport ? 'rgba(249,115,22,0.15)' : '#161b23',
-            color: showReport ? '#f97316' : '#8896aa',
-            border: `1px solid ${showReport ? 'rgba(249,115,22,0.4)' : '#1e2530'}`,
-          }}
-        >📊 {showReport ? 'Hide Full Report' : 'Full Report'}</button>
+        <div className="text-[10px] text-[#4a5568] mb-2 uppercase tracking-wider">Last 30 Days</div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg p-2.5 flex items-center gap-2" style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)' }}>
+            <div className="w-1.5 h-8 rounded-full" style={{ background: '#34d399' }} />
+            <div>
+              <div className="text-[9px] text-[#4a5568]">Closed Won</div>
+              <div className="font-mono font-bold text-sm text-[#34d399]">{emp.won_30d_count} deals</div>
+              <div className="text-[9px] text-[#34d399]">{fmtRevenue(emp.won_30d_revenue)}</div>
+            </div>
+          </div>
+          <div className="rounded-lg p-2.5 flex items-center gap-2" style={{ background: 'rgba(244,63,94,0.07)', border: '1px solid rgba(244,63,94,0.2)' }}>
+            <div className="w-1.5 h-8 rounded-full" style={{ background: '#f43f5e' }} />
+            <div>
+              <div className="text-[9px] text-[#4a5568]">Closed Lost</div>
+              <div className="font-mono font-bold text-sm text-[#f43f5e]">{emp.lost_30d_count} deals</div>
+              <div className="text-[9px] text-[#f43f5e]">{fmtRevenue(emp.lost_30d_revenue)}</div>
+            </div>
+          </div>
+        </div>
       </div>
-      {showReport && <IndividualReport emp={emp} />}
     </div>
   );
 }

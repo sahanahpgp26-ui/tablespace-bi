@@ -299,17 +299,6 @@ function LeadCard({
         <span className="font-mono text-[10px] text-[#4a5568]" title={`${prob}% probability × deal value`}>≈{fmtRevenue(expectedWeighted)}</span>
       </div>
 
-      {/* Probability bar */}
-      <div className="ml-4 mb-1.5">
-        <div className="flex items-center justify-between text-[9px] text-[#4a5568] mb-0.5">
-          <span>Close probability</span>
-          <span className="font-mono">{prob}%</span>
-        </div>
-        <div className="h-1 rounded-full bg-[#1e2530] overflow-hidden">
-          <div className="h-full rounded-full transition-all" style={{ width: `${prob}%`, background: prob >= 70 ? '#34d399' : prob >= 40 ? '#fbbf24' : '#38bdf8' }} />
-        </div>
-      </div>
-
       {/* Close date */}
       <div className="ml-4 mb-1.5">
         {editing === 'close_date' ? (
@@ -407,6 +396,7 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
   const [tasks, setTasks]   = useState<string[]>([]);
   const [events, setEvents] = useState<string[]>([]);
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to);
+  const [closeDate, setCloseDate]   = useState(lead.close_date?.split('T')[0] ?? '');
   const suggested = suggestRep(lead);
 
   const prob = STAGE_PROB[stage] ?? 10;
@@ -416,7 +406,7 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
     await fetch(`/api/leads/${lead.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage, score, notes, status }),
+      body: JSON.stringify({ stage, score, notes, status, close_date: closeDate }),
     });
     onUpdate(lead.id, stage, score);
     setSaving(false);
@@ -478,19 +468,27 @@ function LeadModal({ lead, onClose, onUpdate, onAssign, suggestRep }: {
         {/* Details grid */}
         <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
           {[
-            { k: 'City',                  v: lead.city },
-            { k: 'Source',                v: lead.source },
-            { k: 'Account Type',          v: lead.account_type },
-            { k: 'Expected Close Date',   v: lead.close_date ? new Date(lead.close_date).toLocaleDateString('en-IN') : '—' },
-            { k: 'Budget/seat',           v: lead.seats_required ? fmtRevenue(lead.expected_revenue / 12 / lead.seats_required) + '/mo' : '—' },
-            { k: 'Score',                 v: lead.score.toString() },
-            { k: 'Added',                 v: lead.created_at ? new Date(lead.created_at).toLocaleDateString('en-IN') : '—' },
+            { k: 'City',         v: lead.city },
+            { k: 'Source',       v: lead.source },
+            { k: 'Account Type', v: lead.account_type },
+            { k: 'Budget/seat',  v: lead.seats_required ? fmtRevenue(lead.expected_revenue / 12 / lead.seats_required) + '/mo' : '—' },
+            { k: 'Score',        v: lead.score.toString() },
+            { k: 'Added',        v: lead.created_at ? new Date(lead.created_at).toLocaleDateString('en-IN') : '—' },
           ].map(r => (
             <div key={r.k}>
               <span className="text-[10px] text-[#4a5568] block">{r.k}</span>
               <span className="text-[#dde3ed] text-xs">{r.v}</span>
             </div>
           ))}
+          {/* Expected Close Date — editable */}
+          <div className="col-span-2">
+            <label className="text-[10px] text-[#4a5568] block mb-1">Expected Close Date</label>
+            <input
+              type="date" value={closeDate}
+              onChange={e => setCloseDate(e.target.value)}
+              className="w-full text-xs rounded-md px-2.5 py-1.5 bg-[#161b23] border border-[#1e2530] text-[#dde3ed] outline-none focus:border-[#f97316] transition-colors"
+            />
+          </div>
         </div>
 
         {/* Notes */}
